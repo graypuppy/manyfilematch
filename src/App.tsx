@@ -445,6 +445,24 @@ export default function App() {
     },
   ];
 
+  const mockDeviceMatrixData = comparingFiles.map((f, i) => ({
+    id: f.id,
+    name: f.name,
+    values: ALL_DEVICE_ITEMS.map((item, j) => {
+      if (item === 'MAC地址比对') return i < 2 ? '00:1A:2B:3C:4D:5E' : `00:E0:4C:${Math.floor(Math.random()*256).toString(16).padStart(2,'0')}:${Math.floor(Math.random()*256).toString(16).padStart(2,'0')}:${Math.floor(Math.random()*256).toString(16).padStart(2,'0')}`.toUpperCase();
+      if (item === '计算机名比对') return i < 2 ? 'DESKTOP-8F9A2B' : `LAPTOP-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+      if (item === '计算机用户名比对') return i < 2 ? 'Administrator' : `User_${i}`;
+      if (item === '硬盘序列号比对') return i === 0 || i === 2 ? 'SN-99283-X1' : `SN-${Math.floor(Math.random()*100000)}-${Math.random().toString(36).substr(2, 2).toUpperCase()}`;
+      if (item === 'CPU序列号比对') return 'BFEBFBFF000906E3';
+      if (item === '主板序列号比对') return `MB-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
+      if (item === '文件操作来源比对') return 'Office 365 Pro';
+      if (item === '文件创建码比对') return `{${Math.random().toString(36).substr(2, 8)}-${Math.random().toString(36).substr(2, 4)}}`;
+      if (item === '文件生成锁号比对') return i === 0 || i === 2 ? 'GLD-LOCK-8821' : 'GLD-LOCK-9912';
+      if (item === '机器特征码比对') return i < 2 ? 'HWID-A1B2-C3D4' : `HWID-${Math.random().toString(36).substr(2, 4).toUpperCase()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+      return `特征值 ${i}-${j}`;
+    })
+  }));
+
   const mockTechDetails = {
     docProps: {
       title: '文档属性检查',
@@ -521,6 +539,18 @@ export default function App() {
   const isCreditValueDuplicate = (colIndex: number, value: string) => {
     const allValues = mockCreditData.map(d => d.values[colIndex]);
     return allValues.filter(v => v === value).length > 1;
+  };
+
+  const isDeviceValueDuplicate = (colIndex: number, value: string) => {
+    const allValues = mockDeviceMatrixData.map(d => d.values[colIndex]);
+    return allValues.filter(v => v === value).length > 1;
+  };
+
+  const getDeviceDuplicateDetails = (colIndex: number, value: string, currentFileId: string) => {
+    const duplicates = mockDeviceMatrixData
+      .filter(d => d.id !== currentFileId && d.values[colIndex] === value)
+      .map(d => d.name);
+    return duplicates;
   };
 
   const handleDuplicateClick = (dup: any) => {
@@ -2273,16 +2303,18 @@ export default function App() {
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-sm text-slate-600">
-                          <th className="py-4 px-5 font-bold border-r border-slate-200 w-64 bg-slate-100">文件名称 \ 检测点</th>
+                          <th className="py-4 px-5 font-bold border-r border-slate-200 w-64 bg-white sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">文件名称 \ 检测点</th>
                           {creditItems.map(item => (
-                            <th key={item} className="py-4 px-5 font-bold border-r border-slate-200 whitespace-nowrap">{item}</th>
+                            <th key={item} className="py-4 px-5 font-bold border-r border-slate-200 whitespace-nowrap bg-slate-50">{item}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200">
                         {mockCreditData.map((row) => (
                           <tr key={row.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="py-4 px-5 font-medium text-slate-800 border-r border-slate-200 bg-slate-50/50">{row.name}</td>
+                            <td className="py-4 px-5 font-medium text-slate-800 border-r border-slate-200 bg-white sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                              <div className="truncate w-52" title={row.name}>{row.name}</div>
+                            </td>
                             {row.values.map((val, colIdx) => {
                               const isDup = isCreditValueDuplicate(colIdx, val);
                               const duplicates = isDup ? getDuplicateDetails(colIdx, val, row.id) : [];
@@ -2591,7 +2623,7 @@ export default function App() {
 
               {/* Device Tab */}
               {reportTab === 'device' && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex justify-between items-center">
                     <div>
                       <h3 className="font-bold text-slate-800 flex items-center gap-2"><Cpu className="w-5 h-5 text-purple-500"/> 文件设备特征追踪</h3>
@@ -2599,43 +2631,85 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {mockDeviceData.map((item) => (
-                      <div key={item.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-start">
+                      <div key={item.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-start">
                           <div>
-                            <div className="flex items-center gap-3 mb-2">
-                              <h4 className="font-bold text-slate-800 text-lg">{item.type}</h4>
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                            <div className="flex items-center gap-2 mb-1">
+                              <h4 className="font-bold text-slate-800 text-sm">{item.type}</h4>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
                                 item.riskLevel === '高风险' ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-amber-100 text-amber-700 border border-amber-200'
                               }`}>
                                 {item.riskLevel}
                               </span>
                             </div>
-                            <p className="text-sm text-slate-600">{item.desc}</p>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-xs text-slate-500 mb-1">涉及文件 ({item.files.length})</div>
-                            <div className="flex flex-col items-end gap-1">
-                              {item.files.map((f, idx) => (
-                                <span key={idx} className="text-sm font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded">{f}</span>
-                              ))}
-                            </div>
+                            <p className="text-[11px] text-slate-500 line-clamp-1">{item.desc}</p>
                           </div>
                         </div>
-                        <div className="p-5 bg-white">
-                          <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">提取到的相同特征值</h5>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="p-4 bg-white flex-1">
+                          <div className="space-y-2">
                             {item.evidence.map((ev: any, idx) => (
-                              <div key={idx} className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex flex-col justify-center">
-                                <span className="text-xs text-slate-500 mb-1">{ev.key}</span>
-                                <span className="font-mono text-sm font-bold text-slate-800">{ev.value}</span>
+                              <div key={idx} className="bg-slate-50 border border-slate-100 rounded p-2">
+                                <div className="text-[10px] text-slate-400 mb-0.5">{ev.key}</div>
+                                <div className="font-mono text-xs font-bold text-slate-700 truncate">{ev.value}</div>
                               </div>
                             ))}
                           </div>
                         </div>
                       </div>
                     ))}
+                  </div>
+
+                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                      <h3 className="font-bold text-slate-800 flex items-center gap-2"><Fingerprint className="w-5 h-5 text-purple-500"/> 设备特征比对矩阵</h3>
+                      <div className="text-xs text-slate-500 flex items-center gap-2">
+                        <span className="w-3 h-3 bg-red-100 border border-red-300 rounded-sm inline-block"></span> 标红代表存在重复风险 (多份文件硬件特征一致)
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200 text-sm text-slate-600">
+                            <th className="py-4 px-5 font-bold border-r border-slate-200 w-64 bg-white sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">文件名称 \ 检测点</th>
+                            {ALL_DEVICE_ITEMS.map(item => (
+                              <th key={item} className="py-4 px-5 font-bold border-r border-slate-200 whitespace-nowrap bg-slate-50">{item}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200">
+                          {mockDeviceMatrixData.map((row) => (
+                            <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+                              <td className="py-4 px-5 font-medium text-slate-800 border-r border-slate-200 bg-white sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                                <div className="truncate w-52" title={row.name}>{row.name}</div>
+                              </td>
+                              {row.values.map((val, colIdx) => {
+                                const isDup = isDeviceValueDuplicate(colIdx, val);
+                                const duplicates = isDup ? getDeviceDuplicateDetails(colIdx, val, row.id) : [];
+                                return (
+                                  <td 
+                                    key={colIdx} 
+                                    className={`py-4 px-5 text-sm border-r border-slate-200 relative group transition-colors ${isDup ? 'bg-red-50 text-red-700 font-bold' : 'text-slate-600'}`}
+                                  >
+                                    {isDup && <AlertTriangle className="w-4 h-4 inline mr-1.5 text-red-500" />}
+                                    <span className="font-mono">{val}</span>
+                                    {isDup && (
+                                      <div className="absolute z-50 hidden group-hover:block bg-slate-800 text-white text-[10px] rounded p-2 shadow-lg -top-10 left-0 whitespace-nowrap">
+                                        <div className="font-bold mb-1">硬件特征一致</div>
+                                        <div>涉及文件:</div>
+                                        <div className="text-slate-300 mt-0.5">{duplicates.join(', ')}</div>
+                                        <div className="absolute -bottom-1 left-4 w-2 h-2 bg-slate-800 transform rotate-45"></div>
+                                      </div>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
               )}

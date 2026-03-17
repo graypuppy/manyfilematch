@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { toCanvas } from 'html-to-image';
+import { jsPDF } from 'jspdf';
 import { 
   UploadCloud, 
   FileText, 
@@ -17,6 +19,7 @@ import {
   Cpu,
   X,
   File,
+  Lock,
   AlertCircle,
   ArrowLeft,
   Edit2,
@@ -38,7 +41,12 @@ import {
   CheckCircle,
   BarChart2,
   Briefcase,
-  Info
+  Info,
+  Layers,
+  ShieldCheck,
+  Users,
+  Zap,
+  LogOut
 } from 'lucide-react';
 
 // Configuration Constants
@@ -124,6 +132,7 @@ type FileItem = {
   name: string; 
   size: number; 
   status: '未比对' | '比对中' | '已完成';
+  supportedTypes?: string[];
   risks?: {
     credit: number;
     tech: number;
@@ -133,6 +142,11 @@ type FileItem = {
 };
 
 export default function App() {
+  // Login State
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
   // Mock risk data for the overview
   const riskData = {
     credit: 3,
@@ -173,9 +187,11 @@ export default function App() {
     fileName: string;
     value: string;
     type: string;
-    contentType?: 'text' | 'image' | 'table';
+    contentType?: 'text' | 'image' | 'table' | 'sensitive';
     duplicates?: { fileName: string; value: string }[];
+    item?: any;
   } | null>(null);
+  const [activeSensitiveLoc, setActiveSensitiveLoc] = useState<number | null>(null);
   
   // Project Page State
   const [projectName, setProjectName] = useState('');
@@ -184,6 +200,8 @@ export default function App() {
 
   // Report States
   const [reportTab, setReportTab] = useState<'overview' | 'credit' | 'tech' | 'economic' | 'device'>('overview');
+  const [isExporting, setIsExporting] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
   const [economicTab, setEconomicTab] = useState<'attributes' | 'errors' | 'quotes' | 'quota' | 'materials'>('attributes');
   const [selectedUnreasonableMaterials, setSelectedUnreasonableMaterials] = useState<string[]>(['m2', 'm4']);
   const [priceRules, setPriceRules] = useState({
@@ -229,6 +247,56 @@ export default function App() {
   const [biddingDocFile, setBiddingDocFile] = useState<{id: string, name: string, size: number} | null>(null);
   const [biddingDocError, setBiddingDocError] = useState<string | null>(null);
   const [enableAI, setEnableAI] = useState(true);
+
+  const handleExportPDF = async () => {
+    if (!reportRef.current) return;
+    setIsExporting(true);
+    
+    // Wait for React to render all tabs
+    setTimeout(async () => {
+      try {
+        const canvas = await toCanvas(reportRef.current!, {
+          pixelRatio: 1.5, // Reduced scale to prevent out-of-memory on large reports
+          backgroundColor: '#ffffff',
+          filter: (node) => {
+            // Filter out elements we don't want to capture
+            if (node.hasAttribute && node.hasAttribute('data-html2canvas-ignore')) {
+              return node.getAttribute('data-html2canvas-ignore') !== 'true';
+            }
+            return true;
+          }
+        });
+        
+        // Use JPEG instead of PNG to significantly reduce memory usage and file size
+        const imgData = canvas.toDataURL('image/jpeg', 0.8);
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        
+        let position = 0;
+        let heightLeft = pdfHeight;
+        const pageHeight = pdf.internal.pageSize.getHeight();
+
+        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
+        heightLeft -= pageHeight;
+
+        while (heightLeft > 0) {
+          position = heightLeft - pdfHeight;
+          pdf.addPage();
+          pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
+          heightLeft -= pageHeight;
+        }
+        
+        pdf.save(`${projectName || '比对报告'}.pdf`);
+      } catch (error: any) {
+        console.error('Failed to generate PDF', error);
+        alert('导出失败，将尝试使用浏览器打印功能导出...');
+        window.print();
+      } finally {
+        setIsExporting(false);
+      }
+    }, 800); // Increased timeout to ensure all tabs are fully rendered
+  };
 
   // Purchase & Comparing State
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
@@ -384,20 +452,27 @@ export default function App() {
        }
 
        // Determine content type
-       let contentType: 'text' | 'image' | 'table' = 'text';
+       let contentType: 'text' | 'image' | 'table' | 'sensitive' = 'text';
        if (item.type === 'image' || item.type === 'ocr' || item.type === 'signature') {
          contentType = 'image';
        } else if (item.type === 'table') {
          contentType = 'table';
+       } else if (item.type === 'sensitive') {
+         contentType = 'sensitive';
+       }
+
+       if (contentType === 'sensitive') {
+         setActiveSensitiveLoc(item.locations ? item.locations[0] : null);
        }
 
        setPdfPreviewState({
         isOpen: true,
         fileName: currentFileName,
         value: item.name || item.keyword,
-        type: item.type === 'image' ? '图片查重' : item.type === 'ocr' ? 'OCR查重' : item.type === 'signature' ? '签章查重' : item.type === 'table' ? '表格查重' : item.type,
+        type: item.type === 'image' ? '图片查重' : item.type === 'ocr' ? 'OCR查重' : item.type === 'signature' ? '签章查重' : item.type === 'table' ? '表格查重' : item.type === 'sensitive' ? '敏感信息查重' : item.type,
         contentType: contentType,
-        duplicates: duplicates
+        duplicates: duplicates,
+        item: item
       });
     }
   };
@@ -677,43 +752,6 @@ export default function App() {
       evidence: [
         { key: '加密锁硬件ID', value: '8A9B-2C3D-4E5F-6G7H' },
         { key: '最后保存时间', value: '2026-02-28 14:30:22' }
-      ]
-    },
-  ];
-
-  const mockDeviceData = [
-    { 
-      id: 1, 
-      type: 'MAC地址比对', 
-      desc: '发现相同的物理网卡MAC地址',
-      files: comparingFiles.slice(0, 2).map(f => f.name), 
-      riskLevel: '高风险',
-      evidence: [
-        { key: '网卡1 MAC', value: '00:1A:2B:3C:4D:5E' },
-        { key: '网卡2 MAC', value: '00:1A:2B:3C:4D:5F' }
-      ]
-    },
-    { 
-      id: 2, 
-      type: '计算机名比对', 
-      desc: '文档最后保存的计算机名称完全一致',
-      files: comparingFiles.slice(0, 2).map(f => f.name), 
-      riskLevel: '高风险',
-      evidence: [
-        { key: 'Computer Name', value: 'DESKTOP-8F9A2B' },
-        { key: 'OS Version', value: 'Windows 11 Pro 23H2' }
-      ]
-    },
-    { 
-      id: 3, 
-      type: '文件属性比对', 
-      desc: '文档的创建者和最后修改者信息高度重合',
-      files: [comparingFiles[1]?.name, comparingFiles[2]?.name].filter(Boolean), 
-      riskLevel: '中风险',
-      evidence: [
-        { key: 'Author (创建者)', value: '张三 (zhangsan@company.com)' },
-        { key: 'LastSavedBy (最后保存者)', value: '李四 (lisi@company.com)' },
-        { key: 'TotalEditingTime', value: '452 分钟' }
       ]
     },
   ];
@@ -1082,6 +1120,31 @@ export default function App() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const getFileSupportedTypes = (fileName: string) => {
+    const lowerName = fileName.toLowerCase();
+    if (lowerName.includes('清单') || lowerName.endsWith('.xml') || lowerName.endsWith('.xls') || lowerName.endsWith('.xlsx')) {
+      return ['经济标'];
+    } else if (lowerName.endsWith('.pdf')) {
+      return ['资信标', '技术标(不含属性)'];
+    } else if (lowerName.endsWith('.doc') || lowerName.endsWith('.docx')) {
+      return ['资信标', '技术标'];
+    } else if (lowerName.includes('非加密') || lowerName.includes('投标文件') || lowerName.endsWith('.tb') || lowerName.endsWith('.gef')) {
+      return ['资信标', '经济标', '技术标', '文件设备特征'];
+    }
+    return ['资信标', '技术标']; // Default fallback
+  };
+
+  const getTypeColorClass = (type: string) => {
+    switch (type) {
+      case '资信标': return 'bg-blue-50 text-blue-600 border-blue-100';
+      case '经济标': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
+      case '技术标': return 'bg-purple-50 text-purple-600 border-purple-100';
+      case '技术标(不含属性)': return 'bg-orange-50 text-orange-600 border-orange-100';
+      case '文件设备特征': return 'bg-cyan-50 text-cyan-600 border-cyan-100';
+      default: return 'bg-slate-50 text-slate-600 border-slate-100';
+    }
+  };
+
   const processFiles = (newFiles: FileList | File[]) => {
     setErrorMsg(null);
     
@@ -1110,7 +1173,8 @@ export default function App() {
         id: Math.random().toString(36).substring(7),
         name: file.name,
         size: file.size,
-        status: '未比对'
+        status: '未比对',
+        supportedTypes: getFileSupportedTypes(file.name)
       });
     }
 
@@ -1198,7 +1262,7 @@ export default function App() {
     }
   }, [isEditingName]);
 
-  const renderPreviewPdf = (fileName: string, value: string, type: string, isDuplicate: boolean = false, contentType: 'text' | 'image' | 'table' = 'text') => (
+  const renderPreviewPdf = (fileName: string, value: string, type: string, isDuplicate: boolean = false, contentType: 'text' | 'image' | 'table' | 'sensitive' = 'text', activeSensitiveLoc?: number | null) => (
     <div className="bg-white shadow-lg w-full min-h-full p-12 text-slate-800 relative">
       {/* Mock PDF Header */}
       <div className="border-b-2 border-slate-800 pb-4 mb-8 flex justify-between items-end">
@@ -1214,6 +1278,28 @@ export default function App() {
 
       {/* Mock Content */}
       <div className="space-y-6 font-serif text-base leading-loose text-justify">
+        {contentType === 'sensitive' && (
+          <>
+            <p>
+              <span className="font-bold">第 {activeSensitiveLoc || 1} 页内容</span>
+            </p>
+            <p className="indent-8">
+              本项目的联系人为张三，联系电话是 <span className="font-bold underline decoration-orange-500 decoration-2 underline-offset-4 bg-orange-50 px-1">{value === '联系方式' ? `138${((activeSensitiveLoc || 1) * 12345678).toString().padStart(8, '0').slice(0, 8)}` : value === '身份证号' ? `11010519900101${((activeSensitiveLoc || 1) * 1234).toString().padStart(4, '0').slice(0, 4)}` : value}</span>。
+              请在工作时间拨打此号码进行业务咨询。
+            </p>
+            <p className="indent-8">
+              另外，相关负责人的备用联系方式也已记录在案，确保项目沟通的顺畅。如遇紧急情况，请优先联系主要负责人。
+            </p>
+            <div className="mt-8 p-4 bg-orange-50/50 border border-orange-100 rounded-lg text-sm text-orange-800">
+              <div className="font-bold mb-2 flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4" />
+                敏感信息预警
+              </div>
+              <p>系统在此处检测到疑似 {value} 的敏感信息，请确认是否需要进行脱敏处理。</p>
+            </div>
+          </>
+        )}
+
         {contentType === 'text' && (
           <>
             <p>
@@ -1511,9 +1597,51 @@ export default function App() {
                 )}
               </AnimatePresence>
             </div>
-            <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-slate-600">
-              <User className="w-5 h-5" />
-            </div>
+            {isLoggedIn ? (
+              <div className="flex items-center gap-3 relative">
+                <button className="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors">
+                  我的订单
+                </button>
+                <div 
+                  className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 cursor-pointer hover:bg-indigo-200 transition-colors"
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                >
+                  <User className="w-5 h-5" />
+                </div>
+                
+                <AnimatePresence>
+                  {showUserMenu && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full mt-2 w-40 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden z-50"
+                    >
+                      <div className="p-2">
+                        <button 
+                          className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2"
+                          onClick={() => {
+                            setIsLoggedIn(false);
+                            setShowUserMenu(false);
+                          }}
+                        >
+                          <LogOut className="w-4 h-4" />
+                          退出登录
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ) : (
+              <div 
+                className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-slate-600 cursor-pointer hover:bg-slate-300 transition-colors"
+                onClick={() => setShowLoginModal(true)}
+              >
+                <User className="w-5 h-5" />
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -1557,6 +1685,25 @@ export default function App() {
                     </label>
                     <button className="bg-white border border-slate-300 text-slate-700 px-6 py-2.5 rounded-lg font-medium hover:bg-slate-50 transition-colors shadow-sm">
                       导入项目文件夹
+                    </button>
+                    <button 
+                      onClick={() => {
+                        const testFiles = [
+                          { name: '投标企业A-非加密投标文件.tb', size: 1024 * 1024 * 15 },
+                          { name: '投标企业B-非加密投标文件.gef', size: 1024 * 1024 * 14 },
+                          { name: '投标企业A-工程量清单.xml', size: 1024 * 1024 * 2 },
+                          { name: '投标企业B-已标价工程量清单.xlsx', size: 1024 * 1024 * 3 },
+                          { name: '投标企业A-技术标.pdf', size: 1024 * 1024 * 8 },
+                          { name: '投标企业B-施工组织设计.pdf', size: 1024 * 1024 * 9 },
+                          { name: '投标企业A-资信标.docx', size: 1024 * 1024 * 5 },
+                          { name: '投标企业B-商务标.doc', size: 1024 * 1024 * 4 }
+                        ];
+                        const mockFileList = testFiles.map(f => new window.File([new ArrayBuffer(f.size)], f.name, { type: 'application/octet-stream' }));
+                        processFiles(mockFileList);
+                      }}
+                      className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-6 py-2.5 rounded-lg font-medium hover:bg-emerald-100 transition-colors shadow-sm"
+                    >
+                      加载测试文件
                     </button>
                   </div>
                 </div>
@@ -1608,68 +1755,83 @@ export default function App() {
                         <History className="w-5 h-5 text-slate-500" />
                         历史检查项目
                       </h2>
-                      <button 
-                        onClick={() => setCurrentPage('history')}
-                        className="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center"
-                      >
-                        查看更多 <ChevronRight className="w-4 h-4" />
-                      </button>
+                      {isLoggedIn && (
+                        <button 
+                          onClick={() => setCurrentPage('history')}
+                          className="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center"
+                        >
+                          查看更多 <ChevronRight className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                          <thead>
-                            <tr className="bg-slate-50 border-b border-slate-200 text-sm text-slate-500">
-                              <th className="py-3 px-4 font-medium whitespace-nowrap">项目编号/名称</th>
-                              <th className="py-3 px-4 font-medium whitespace-nowrap">检查时间</th>
-                              <th className="py-3 px-4 font-medium whitespace-nowrap">文件数</th>
-                              <th className="py-3 px-4 font-medium whitespace-nowrap">风险评估</th>
-                              <th className="py-3 px-4 font-medium whitespace-nowrap">状态</th>
-                              <th className="py-3 px-4 font-medium text-right whitespace-nowrap">操作</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {historyItems.map((item) => (
-                              <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                                <td className="py-3 px-4 min-w-[200px]">
-                                  <div className="font-medium text-slate-800">{item.name}</div>
-                                  <div className="text-xs text-slate-400 mt-0.5">{item.id}</div>
-                                </td>
-                                <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap">{item.date}</td>
-                                <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap">{item.files} 份</td>
-                                <td className="py-3 px-4 whitespace-nowrap">
-                                  <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
-                                    item.risk === '-' ? 'bg-slate-50 text-slate-500 border border-slate-200' :
-                                    item.risk === '高风险' ? 'bg-red-50 text-red-700 border border-red-200' :
-                                    item.risk === '中风险' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                                    'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                  }`}>
-                                    {item.risk}
-                                  </span>
-                                </td>
-                                <td className="py-3 px-4 whitespace-nowrap">
-                                  <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
-                                    item.status === '检查中' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
-                                    item.status === '已完成' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                                    'bg-slate-50 text-slate-700 border border-slate-200'
-                                  }`}>
-                                    {item.status === '检查中' && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
-                                    {item.status}
-                                  </span>
-                                </td>
-                                <td className="py-3 px-4 text-right whitespace-nowrap">
-                                  <button 
-                                    onClick={() => setCurrentPage('report')}
-                                    className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
-                                  >
-                                    查看报告
-                                  </button>
-                                </td>
+                      {!isLoggedIn ? (
+                        <div className="p-8 text-center">
+                          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                            <Lock className="w-6 h-6 text-slate-400" />
+                          </div>
+                          <h3 className="text-sm font-bold text-slate-800 mb-1">登录后查看</h3>
+                          <p className="text-xs text-slate-500 mb-4">登录账号，查看最近的比对记录。</p>
+                          <button onClick={() => setShowLoginModal(true)} className="bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-md text-sm font-medium hover:bg-indigo-100 transition-colors">
+                            登录
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-slate-50 border-b border-slate-200 text-sm text-slate-500">
+                                <th className="py-3 px-4 font-medium whitespace-nowrap">项目编号/名称</th>
+                                <th className="py-3 px-4 font-medium whitespace-nowrap">检查时间</th>
+                                <th className="py-3 px-4 font-medium whitespace-nowrap">文件数</th>
+                                <th className="py-3 px-4 font-medium whitespace-nowrap">风险评估</th>
+                                <th className="py-3 px-4 font-medium whitespace-nowrap">状态</th>
+                                <th className="py-3 px-4 font-medium text-right whitespace-nowrap">操作</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {historyItems.map((item) => (
+                                <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
+                                  <td className="py-3 px-4 min-w-[200px]">
+                                    <div className="font-medium text-slate-800">{item.name}</div>
+                                    <div className="text-xs text-slate-400 mt-0.5">{item.id}</div>
+                                  </td>
+                                  <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap">{item.date}</td>
+                                  <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap">{item.files} 份</td>
+                                  <td className="py-3 px-4 whitespace-nowrap">
+                                    <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
+                                      item.risk === '-' ? 'bg-slate-50 text-slate-500 border border-slate-200' :
+                                      item.risk === '高风险' ? 'bg-red-50 text-red-700 border border-red-200' :
+                                      item.risk === '中风险' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                                      'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    }`}>
+                                      {item.risk}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 whitespace-nowrap">
+                                    <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
+                                      item.status === '检查中' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                                      item.status === '已完成' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                                      'bg-slate-50 text-slate-700 border border-slate-200'
+                                    }`}>
+                                      {item.status === '检查中' && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
+                                      {item.status}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 text-right whitespace-nowrap">
+                                    <button 
+                                      onClick={() => setCurrentPage('report')}
+                                      className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                                    >
+                                      查看报告
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   </section>
                 </div>
@@ -1715,16 +1877,25 @@ export default function App() {
                     <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full blur-xl"></div>
                     <div className="relative z-10">
                       <h3 className="font-semibold text-lg mb-2">本月比对统计</h3>
-                      <div className="grid grid-cols-2 gap-4 mt-4">
-                        <div>
-                          <p className="text-indigo-100 text-sm">累计比对文件</p>
-                          <p className="text-3xl font-bold mt-1">1,284</p>
+                      {!isLoggedIn ? (
+                        <div className="mt-4 flex flex-col items-start">
+                          <p className="text-indigo-100 text-sm mb-3">登录后查看您的专属统计数据</p>
+                          <button onClick={() => setShowLoginModal(true)} className="bg-white/20 hover:bg-white/30 text-white px-4 py-1.5 rounded-md text-sm font-medium transition-colors backdrop-blur-sm">
+                            立即登录
+                          </button>
                         </div>
-                        <div>
-                          <p className="text-indigo-100 text-sm">发现差异项目</p>
-                          <p className="text-3xl font-bold mt-1">12</p>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-4 mt-4">
+                          <div>
+                            <p className="text-indigo-100 text-sm">累计比对文件</p>
+                            <p className="text-3xl font-bold mt-1">1,284</p>
+                          </div>
+                          <div>
+                            <p className="text-indigo-100 text-sm">发现差异项目</p>
+                            <p className="text-3xl font-bold mt-1">12</p>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </section>
                 </div>
@@ -1749,63 +1920,76 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              <div className="space-y-4">
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="p-6">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="text-xs text-slate-500 border-b border-slate-100">
-                          <th className="pb-3 font-medium">项目名称</th>
-                          <th className="pb-3 font-medium">项目编号</th>
-                          <th className="pb-3 font-medium">检查时间</th>
-                          <th className="pb-3 font-medium">文件数</th>
-                          <th className="pb-3 font-medium">风险评估</th>
-                          <th className="pb-3 font-medium">状态</th>
-                          <th className="pb-3 font-medium text-right">操作</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50">
-                        {historyItems.map(record => (
-                          <tr key={record.id} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="py-3 text-sm font-semibold text-slate-800">{record.name}</td>
-                            <td className="py-3 text-sm font-medium text-slate-500">{record.id}</td>
-                            <td className="py-3 text-sm text-slate-500">{record.date}</td>
-                            <td className="py-3 text-sm text-slate-500">{record.files} 份</td>
-                            <td className="py-3">
-                              <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
-                                record.risk === '-' ? 'bg-slate-50 text-slate-500 border border-slate-200' :
-                                record.risk === '高风险' ? 'bg-red-50 text-red-700 border border-red-200' :
-                                record.risk === '中风险' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                                'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              }`}>
-                                {record.risk}
-                              </span>
-                            </td>
-                            <td className="py-3">
-                              <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
-                                record.status === '检查中' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
-                                record.status === '已完成' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                                'bg-slate-50 text-slate-700 border border-slate-200'
-                              }`}>
-                                {record.status === '检查中' && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
-                                {record.status}
-                              </span>
-                            </td>
-                            <td className="py-3 text-right">
-                              <button 
-                                onClick={() => setCurrentPage('report')}
-                                className="text-indigo-600 hover:text-indigo-700 text-sm font-medium"
-                              >
-                                查看详情
-                              </button>
-                            </td>
+              {!isLoggedIn ? (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center">
+                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Lock className="w-8 h-8 text-slate-400" />
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-800 mb-2">登录后查看历史记录</h3>
+                  <p className="text-slate-500 mb-6">登录账号，随时随地查看您的比对历史和详细报告。</p>
+                  <button onClick={() => setShowLoginModal(true)} className="bg-indigo-600 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-indigo-700 transition-colors">
+                    立即登录
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="p-6">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="text-xs text-slate-500 border-b border-slate-100">
+                            <th className="pb-3 font-medium">项目名称</th>
+                            <th className="pb-3 font-medium">项目编号</th>
+                            <th className="pb-3 font-medium">检查时间</th>
+                            <th className="pb-3 font-medium">文件数</th>
+                            <th className="pb-3 font-medium">风险评估</th>
+                            <th className="pb-3 font-medium">状态</th>
+                            <th className="pb-3 font-medium text-right">操作</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {historyItems.map(record => (
+                            <tr key={record.id} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="py-3 text-sm font-semibold text-slate-800">{record.name}</td>
+                              <td className="py-3 text-sm font-medium text-slate-500">{record.id}</td>
+                              <td className="py-3 text-sm text-slate-500">{record.date}</td>
+                              <td className="py-3 text-sm text-slate-500">{record.files} 份</td>
+                              <td className="py-3">
+                                <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
+                                  record.risk === '-' ? 'bg-slate-50 text-slate-500 border border-slate-200' :
+                                  record.risk === '高风险' ? 'bg-red-50 text-red-700 border border-red-200' :
+                                  record.risk === '中风险' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                                  'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                }`}>
+                                  {record.risk}
+                                </span>
+                              </td>
+                              <td className="py-3">
+                                <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
+                                  record.status === '检查中' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                                  record.status === '已完成' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                                  'bg-slate-50 text-slate-700 border border-slate-200'
+                                }`}>
+                                  {record.status === '检查中' && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
+                                  {record.status}
+                                </span>
+                              </td>
+                              <td className="py-3 text-right">
+                                <button 
+                                  onClick={() => setCurrentPage('report')}
+                                  className="text-indigo-600 hover:text-indigo-700 text-sm font-medium"
+                                >
+                                  查看详情
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </motion.div>
           )}
 
@@ -1825,60 +2009,75 @@ export default function App() {
                   </h1>
                   <p className="text-slate-500 mt-1">管理和预设比对规则模板，以便在创建项目时快速应用。</p>
                 </div>
-                <button 
-                  onClick={handleNewTemplate}
-                  className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium"
-                >
-                  <Plus className="w-4 h-4" />
-                  新建模板
-                </button>
+                {isLoggedIn && (
+                  <button 
+                    onClick={handleNewTemplate}
+                    className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium"
+                  >
+                    <Plus className="w-4 h-4" />
+                    新建模板
+                  </button>
+                )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {templates.map(tpl => (
-                  <div key={tpl.id} className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
-                    <div className="p-5 border-b border-slate-100 bg-slate-50">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-bold text-slate-800 text-lg">{tpl.name}</h3>
-                        {tpl.id === 'tpl-1' && (
-                          <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1 rounded whitespace-nowrap">默认</span>
-                        )}
-                      </div>
-                      <p className="text-sm text-slate-500 line-clamp-2">{tpl.desc}</p>
-                    </div>
-                    <div className="p-5 flex-1">
-                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">包含检查项</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {tpl.config.types.map(type => (
-                          <span key={type} className="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded-md border border-slate-200">
-                            {type}
-                          </span>
-                        ))}
-                        {tpl.config.types.length === 0 && (
-                          <span className="text-sm text-slate-400 italic">未选择任何检查项</span>
-                        )}
-                      </div>
-                      
-                      <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-4">
-                        <div>
-                          <div className="text-xs text-slate-500 mb-1">相似度阈值</div>
-                          <div className="font-medium text-slate-700">{tpl.config.threshold}%</div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-slate-500 mb-1">AI 深度分析</div>
-                          <div className="font-medium text-slate-700">{tpl.config.enableAI ? '已开启' : '未开启'}</div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-                      <button onClick={(e) => { e.stopPropagation(); handleEditTemplate(tpl); }} className="text-sm text-slate-600 hover:text-indigo-600 font-medium transition-colors">编辑</button>
-                      {tpl.id !== 'tpl-1' && (
-                        <button onClick={(e) => { e.stopPropagation(); handleDeleteTemplate(tpl.id); }} className="text-sm text-red-600 hover:text-red-700 font-medium transition-colors">删除</button>
-                      )}
-                    </div>
+              {!isLoggedIn ? (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center">
+                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Lock className="w-8 h-8 text-slate-400" />
                   </div>
-                ))}
-              </div>
+                  <h3 className="text-lg font-bold text-slate-800 mb-2">登录后配置规则</h3>
+                  <p className="text-slate-500 mb-6">登录账号，创建和管理您的自定义比对规则模板。</p>
+                  <button onClick={() => setShowLoginModal(true)} className="bg-indigo-600 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-indigo-700 transition-colors">
+                    立即登录
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {templates.map(tpl => (
+                    <div key={tpl.id} className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
+                      <div className="p-5 border-b border-slate-100 bg-slate-50">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-bold text-slate-800 text-lg">{tpl.name}</h3>
+                          {tpl.id === 'tpl-1' && (
+                            <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1 rounded whitespace-nowrap">默认</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-slate-500 line-clamp-2">{tpl.desc}</p>
+                      </div>
+                      <div className="p-5 flex-1">
+                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">包含检查项</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {tpl.config.types.map(type => (
+                            <span key={type} className="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded-md border border-slate-200">
+                              {type}
+                            </span>
+                          ))}
+                          {tpl.config.types.length === 0 && (
+                            <span className="text-sm text-slate-400 italic">未选择任何检查项</span>
+                          )}
+                        </div>
+                        
+                        <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-4">
+                          <div>
+                            <div className="text-xs text-slate-500 mb-1">相似度阈值</div>
+                            <div className="font-medium text-slate-700">{tpl.config.threshold}%</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-slate-500 mb-1">AI 深度分析</div>
+                            <div className="font-medium text-slate-700">{tpl.config.enableAI ? '已开启' : '未开启'}</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+                        <button onClick={(e) => { e.stopPropagation(); handleEditTemplate(tpl); }} className="text-sm text-slate-600 hover:text-indigo-600 font-medium transition-colors">编辑</button>
+                        {tpl.id !== 'tpl-1' && (
+                          <button onClick={(e) => { e.stopPropagation(); handleDeleteTemplate(tpl.id); }} className="text-sm text-red-600 hover:text-red-700 font-medium transition-colors">删除</button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -1979,7 +2178,18 @@ export default function App() {
                               <File className="w-5 h-5 text-slate-400 shrink-0" />
                               <div className="truncate">
                                 <p className="text-sm font-medium text-slate-700 truncate">{file.name}</p>
-                                <p className="text-xs text-slate-400 mt-0.5">{formatSize(file.size)}</p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <p className="text-xs text-slate-400">{formatSize(file.size)}</p>
+                                  {file.supportedTypes && file.supportedTypes.length > 0 && (
+                                    <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+                                      {file.supportedTypes.map((type, idx) => (
+                                        <span key={idx} className={`text-[10px] px-1.5 py-0.5 rounded border whitespace-nowrap ${getTypeColorClass(type)}`}>
+                                          {type}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
                             <div className="flex items-center gap-4 shrink-0 pl-4">
@@ -2338,9 +2548,10 @@ export default function App() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
               className="space-y-6"
+              ref={reportRef}
             >
               {/* Report Header */}
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-6" data-html2canvas-ignore={isExporting ? "true" : "false"}>
                 <div className="flex items-center gap-4">
                   <button onClick={() => setCurrentPage('history')} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-full transition-colors">
                     <ArrowLeft className="w-6 h-6" />
@@ -2348,14 +2559,28 @@ export default function App() {
                   <h1 className="text-2xl font-bold text-slate-900">比对结果概览</h1>
                 </div>
                 <div className="flex gap-2">
-                  <button className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 flex items-center gap-2 text-sm font-medium shadow-sm">
-                    <Download className="w-4 h-4" /> 导出报告
+                  <button 
+                    onClick={handleExportPDF}
+                    disabled={isExporting}
+                    className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 flex items-center gap-2 text-sm font-medium shadow-sm disabled:opacity-50"
+                  >
+                    {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} 
+                    {isExporting ? '导出中...' : '导出报告'}
                   </button>
                 </div>
               </div>
 
+              {/* Export Title (Only visible during export) */}
+              {isExporting && (
+                <div className="text-center mb-8">
+                  <h1 className="text-3xl font-bold text-slate-900 mb-2">{projectName || '某工程项目招标文件比对'}</h1>
+                  <p className="text-slate-500">比对结果完整报告</p>
+                </div>
+              )}
+
               {/* Tabs */}
-              <div className="flex gap-6 border-b border-slate-200 mb-6 overflow-x-auto hide-scrollbar">
+              {!isExporting && (
+                <div className="flex gap-6 border-b border-slate-200 mb-6 overflow-x-auto hide-scrollbar" data-html2canvas-ignore="true">
                 <button 
                   className={`pb-3 px-2 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${reportTab === 'overview' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
                   onClick={() => setReportTab('overview')}
@@ -2387,10 +2612,12 @@ export default function App() {
                   文件设备特征比对
                 </button>
               </div>
+              )}
 
               {/* Overview Tab */}
-              {reportTab === 'overview' && (
+              {(reportTab === 'overview' || isExporting) && (
                 <div className="space-y-6">
+                  {isExporting && <h2 className="text-2xl font-bold text-slate-800 border-b pb-2 mt-8">结果概览</h2>}
                   {/* Project Info Summary */}
                   <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -2534,8 +2761,9 @@ export default function App() {
               )}
 
               {/* Credit Tab */}
-              {reportTab === 'credit' && (
+              {(reportTab === 'credit' || isExporting) && (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                  {isExporting && <h2 className="text-2xl font-bold text-slate-800 border-b pb-2 m-5 mb-0">资信标比对</h2>}
                   <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                     <h3 className="font-bold text-slate-800 flex items-center gap-2"><Clock className="w-5 h-5 text-blue-500"/> 资信标特征矩阵</h3>
                     <div className="text-xs text-slate-500 flex items-center gap-2">
@@ -2602,8 +2830,9 @@ export default function App() {
               )}
 
               {/* Tech Tab */}
-              {reportTab === 'tech' && (
+              {(reportTab === 'tech' || isExporting) && (
                 <div className="space-y-8">
+                  {isExporting && <h2 className="text-2xl font-bold text-slate-800 border-b pb-2 mt-8">技术标比对</h2>}
                   {/* Section 1: Document Properties Matrix */}
                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                     <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
@@ -2805,10 +3034,12 @@ export default function App() {
               )}
 
               {/* Economic Tab */}
-              {reportTab === 'economic' && (
+              {(reportTab === 'economic' || isExporting) && (
                 <div className="space-y-6">
+                  {isExporting && <h2 className="text-2xl font-bold text-slate-800 border-b pb-2 mt-8">经济标比对</h2>}
                   {/* Sub-tabs */}
-                  <div className="flex flex-wrap gap-2">
+                  {!isExporting && (
+                  <div className="flex flex-wrap gap-2" data-html2canvas-ignore="true">
                     <button 
                       className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${economicTab === 'attributes' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
                       onClick={() => setEconomicTab('attributes')}
@@ -2840,9 +3071,11 @@ export default function App() {
                       项目人材机汇总分析
                     </button>
                   </div>
+                  )}
 
-                  {economicTab === 'attributes' && (
+                  {(economicTab === 'attributes' || isExporting) && (
                     <div className="space-y-4">
+                      {isExporting && <h3 className="text-xl font-bold text-slate-800 mt-6 border-b pb-2">项目属性分析（软硬件信息）</h3>}
                       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex justify-between items-center">
                         <div>
                           <h3 className="font-bold text-slate-800 flex items-center gap-2"><Fingerprint className="w-5 h-5 text-amber-500"/> 项目属性分析（软硬件信息）</h3>
@@ -3016,8 +3249,9 @@ export default function App() {
                     </div>
                   )}
 
-                  {economicTab === 'errors' && (
+                  {(economicTab === 'errors' || isExporting) && (
                     <div className="space-y-4">
+                      {isExporting && <h3 className="text-xl font-bold text-slate-800 mt-6 border-b pb-2">错误一致性分析</h3>}
                       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col gap-4 relative">
                         <div className="flex justify-between items-start">
                           <div>
@@ -3031,12 +3265,12 @@ export default function App() {
                             <div className="text-center">
                               <div className="text-3xl font-bold text-slate-800 relative inline-block">
                                 {mockErrorConsistencyData.length}
-                                {Object.values(unreasonableErrors).filter(e => e.checked).length > 0 && (
+                                {Object.values(unreasonableErrors).filter((e: any) => e.checked).length > 0 && (
                                   <span 
                                     className="absolute -top-2 -right-4 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full cursor-help"
-                                    title={`已标记 ${Object.values(unreasonableErrors).filter(e => e.checked).length} 个不合理项`}
+                                    title={`已标记 ${Object.values(unreasonableErrors).filter((e: any) => e.checked).length} 个不合理项`}
                                   >
-                                    {Object.values(unreasonableErrors).filter(e => e.checked).length}
+                                    {Object.values(unreasonableErrors).filter((e: any) => e.checked).length}
                                   </span>
                                 )}
                               </div>
@@ -3152,8 +3386,9 @@ export default function App() {
                     </div>
                   )}
 
-                  {economicTab === 'quotes' && (
+                  {(economicTab === 'quotes' || isExporting) && (
                     <div className="space-y-4">
+                      {isExporting && <h3 className="text-xl font-bold text-slate-800 mt-6 border-b pb-2">报价一致性分析</h3>}
                       {/* 规律性规则设置 & 筛选条件 */}
                       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
                         <div className="flex justify-between items-center mb-4">
@@ -3387,8 +3622,9 @@ export default function App() {
                     </div>
                   )}
 
-                  {economicTab === 'quota' && (
+                  {(economicTab === 'quota' || isExporting) && (
                     <div className="space-y-4">
+                      {isExporting && <h3 className="text-xl font-bold text-slate-800 mt-6 border-b pb-2">定额一致性分析</h3>}
                       {/* 规则设置 & 筛选条件 */}
                       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
                         <div className="flex justify-between items-center mb-4">
@@ -3525,8 +3761,9 @@ export default function App() {
                     </div>
                   )}
 
-                  {economicTab === 'materials' && (
+                  {(economicTab === 'materials' || isExporting) && (
                     <div className="space-y-4">
+                      {isExporting && <h3 className="text-xl font-bold text-slate-800 mt-6 border-b pb-2">项目人材机汇总分析</h3>}
                       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex justify-between items-center">
                         <div>
                           <h3 className="font-bold text-slate-800 flex items-center gap-2"><Briefcase className="w-5 h-5 text-indigo-500"/> 项目人材机汇总分析</h3>
@@ -3680,45 +3917,9 @@ export default function App() {
               )}
 
               {/* Device Tab */}
-              {reportTab === 'device' && (
+              {(reportTab === 'device' || isExporting) && (
                 <div className="space-y-6">
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex justify-between items-center">
-                    <div>
-                      <h3 className="font-bold text-slate-800 flex items-center gap-2"><Cpu className="w-5 h-5 text-purple-500"/> 文件设备特征追踪</h3>
-                      <p className="text-sm text-slate-500 mt-1">提取文档底层元数据及硬件特征码，共发现 {mockDeviceData.length} 处高度重合特征。</p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {mockDeviceData.map((item) => (
-                      <div key={item.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-                        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-start">
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <h4 className="font-bold text-slate-800 text-sm">{item.type}</h4>
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                item.riskLevel === '高风险' ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-amber-100 text-amber-700 border border-amber-200'
-                              }`}>
-                                {item.riskLevel}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-slate-500 line-clamp-1">{item.desc}</p>
-                          </div>
-                        </div>
-                        <div className="p-4 bg-white flex-1">
-                          <div className="space-y-2">
-                            {item.evidence.map((ev: any, idx) => (
-                              <div key={idx} className="bg-slate-50 border border-slate-100 rounded p-2">
-                                <div className="text-[10px] text-slate-400 mb-0.5">{ev.key}</div>
-                                <div className="font-mono text-xs font-bold text-slate-700 truncate">{ev.value}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
+                  {isExporting && <h2 className="text-2xl font-bold text-slate-800 border-b pb-2 mt-8">文件设备特征比对</h2>}
                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                     <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                       <h3 className="font-bold text-slate-800 flex items-center gap-2"><Fingerprint className="w-5 h-5 text-purple-500"/> 设备特征比对矩阵</h3>
@@ -3775,6 +3976,124 @@ export default function App() {
           )}
         </AnimatePresence>
       </main>
+
+      {/* Login Modal */}
+      {showLoginModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white w-[800px] h-[500px] rounded-xl shadow-2xl overflow-hidden flex animate-in fade-in zoom-in-95 duration-200">
+            {/* Left Side - Blue */}
+            <div className="w-[360px] bg-blue-600 p-10 text-white flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-3 mb-12">
+                  <div className="bg-white p-2 rounded-lg">
+                    <Layers className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <span className="font-bold text-xl">SaaS 业务平台</span>
+                </div>
+                
+                <h2 className="text-3xl font-bold mb-12">上云即享超值福利</h2>
+                
+                <div className="space-y-8">
+                  <div className="flex gap-4">
+                    <div className="bg-blue-500/50 p-2.5 rounded-lg h-fit">
+                      <ShieldCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold mb-1">首购享特惠</h4>
+                      <p className="text-blue-100 text-sm leading-relaxed">丰富云产品即刻体验，极致的性能，首购低至1元</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-4">
+                    <div className="bg-blue-500/50 p-2.5 rounded-lg h-fit">
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold mb-1">全链路支撑</h4>
+                      <p className="text-blue-100 text-sm leading-relaxed">全方位产品矩阵与丰富解决方案，助力业务增长闭环</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-4">
+                    <div className="bg-blue-500/50 p-2.5 rounded-lg h-fit">
+                      <Zap className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold mb-1">优质的服务</h4>
+                      <p className="text-blue-100 text-sm leading-relaxed">提供专业的方案定制与技术支持，7x24小时全天候客服</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Right Side - Login Form */}
+            <div className="flex-1 p-12 relative flex flex-col">
+              <button 
+                onClick={() => setShowLoginModal(false)} 
+                className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-2"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              
+              <h3 className="text-2xl font-bold text-slate-800 mb-8 mt-4">欢迎来到 SaaS 业务平台</h3>
+              
+              <div className="flex gap-6 border-b border-slate-200 mb-8">
+                <button className="pb-3 text-slate-500 font-medium hover:text-slate-800 transition-colors">账号登录</button>
+                <button className="pb-3 text-blue-600 font-medium border-b-2 border-blue-600">手机号登录</button>
+                <button className="pb-3 text-slate-500 font-medium hover:text-slate-800 transition-colors">标证通扫码</button>
+              </div>
+              
+              <div className="space-y-5">
+                <div className="flex border border-slate-300 rounded-md overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition-all">
+                  <div className="bg-slate-50 px-4 py-3 border-r border-slate-300 text-slate-600 flex items-center gap-1">
+                    +86 <ChevronDown className="w-4 h-4 ml-1" />
+                  </div>
+                  <input 
+                    type="text" 
+                    placeholder="请输入手机号码 (测试: 13800138000)" 
+                    className="flex-1 px-4 py-3 outline-none text-slate-800 placeholder:text-slate-400"
+                  />
+                </div>
+                
+                <div className="flex gap-4">
+                  <input 
+                    type="text" 
+                    placeholder="请输入验证码 (测试: 1234)" 
+                    className="flex-1 border border-slate-300 rounded-md px-4 py-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-slate-800 placeholder:text-slate-400"
+                  />
+                  <button className="bg-slate-100 text-slate-600 px-4 py-3 rounded-md font-medium hover:bg-slate-200 transition-colors whitespace-nowrap">
+                    获取验证码(38s)
+                  </button>
+                </div>
+                
+                <div className="flex items-center gap-2 mt-2">
+                  <input type="checkbox" id="terms" className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                  <label htmlFor="terms" className="text-sm text-slate-500">
+                    登录视为您已阅读并同意 <a href="#" className="text-blue-600 hover:underline">服务条款</a> 和 <a href="#" className="text-blue-600 hover:underline">隐私政策</a>
+                  </label>
+                </div>
+                
+                <button 
+                  onClick={() => {
+                    setIsLoggedIn(true);
+                    setShowLoginModal(false);
+                  }}
+                  className="w-full bg-blue-600 text-white font-medium py-3 rounded-md hover:bg-blue-700 transition-colors mt-2"
+                >
+                  登录 / 注册
+                </button>
+              </div>
+              
+              <div className="mt-auto pt-8 flex justify-center items-center gap-3 text-sm text-blue-600">
+                <a href="#" className="hover:underline">个人账户登录</a>
+                <span className="text-slate-300">|</span>
+                <a href="#" className="text-slate-500 hover:text-slate-700 transition-colors">企业账户登录</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Purchase Modal */}
       {showPurchaseModal && (
@@ -4232,8 +4551,48 @@ export default function App() {
                 <X className="w-6 h-6 text-slate-500" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto bg-slate-100 p-8 flex justify-center">
-              {pdfPreviewState.duplicates && pdfPreviewState.duplicates.length > 0 ? (
+            <div className={`flex-1 overflow-y-auto bg-slate-100 flex justify-center ${pdfPreviewState.contentType === 'sensitive' ? 'p-0' : 'p-8'}`}>
+              {pdfPreviewState.contentType === 'sensitive' ? (
+                <div className="flex w-full h-full">
+                  {/* Left: Extracted Sensitive Info List */}
+                  <div className="w-80 border-r border-slate-200 bg-slate-50 flex flex-col h-full overflow-hidden">
+                    <div className="p-4 border-b border-slate-200 bg-white flex items-center justify-between">
+                      <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        <ShieldAlert className="w-5 h-5 text-orange-500"/> 
+                        提取的敏感信息
+                      </h3>
+                      <span className="text-xs text-slate-500">
+                        共 {pdfPreviewState.item?.count || 0} 处
+                      </span>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                      {(pdfPreviewState.item?.locations || []).map((loc: number, idx: number) => {
+                         const mockValue = pdfPreviewState.item?.keyword === '联系方式' ? `138${(loc * 12345678).toString().padStart(8, '0').slice(0, 8)}` : `11010519900101${(loc * 1234).toString().padStart(4, '0').slice(0, 4)}`;
+                         return (
+                          <button 
+                            key={idx}
+                            onClick={() => setActiveSensitiveLoc(loc)}
+                            className={`w-full text-left p-4 rounded-xl border transition-all ${activeSensitiveLoc === loc ? 'bg-orange-50 border-orange-300 shadow-sm ring-1 ring-orange-500/20' : 'bg-white border-slate-200 hover:border-orange-200 hover:shadow-sm'}`}
+                          >
+                            <div className="font-bold text-sm text-slate-800 mb-2">{mockValue}</div>
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-slate-500">位置</span>
+                              <span className="font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded border border-slate-200">第 {loc} 页</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  
+                  {/* Right: PDF View */}
+                  <div className="flex-1 min-w-0 h-full overflow-y-auto bg-slate-200 p-8 flex justify-center">
+                    <div className="w-full max-w-3xl">
+                      {renderPreviewPdf(pdfPreviewState.fileName, pdfPreviewState.value, pdfPreviewState.type, false, pdfPreviewState.contentType, activeSensitiveLoc)}
+                    </div>
+                  </div>
+                </div>
+              ) : pdfPreviewState.duplicates && pdfPreviewState.duplicates.length > 0 ? (
                 <div className="flex gap-8 w-full max-w-[1600px]">
                   {/* Original File */}
                   <div className="flex-1 min-w-0">

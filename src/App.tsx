@@ -51,14 +51,14 @@ import {
 
 // Configuration Constants
 const ALL_CHECK_TYPES = ['资信标比对', '技术标比对', '经济标比对', '文件设备特征比对'];
-const ALL_CREDIT_ITEMS = ['法人名称', '法定代表人', '盖章重复', '手机号', '邮箱', '电子证照', '图片文字', '引用内容', '地址', '人员重复', '文件属性'];
+const ALL_CREDIT_ITEMS = ['投标成员姓名', '投标成员身份证', '建筑业企业资质证书证书编号', '安全生产许可证证书编号', '建筑师注册证书注册编号', '安全生产考核合格证书编号', '专业建筑资格证书管理号', '职业培训合格证证书编号', '业绩工程名称雷同', '项目经理身份证号雷同'];
 const ALL_TECH_ITEMS = ['全文语句雷同比对',  'Word属性查重', '图片查重', '图片文字OCR查重', '表格文字查重', '敏感信息查重', '签章查重', '引用内容查重'];
 const ALL_ECONOMIC_ITEMS = ['清单错误一致性比对', '清单内容查重', '项目总价规律性比对', '分部分项报价规律比对', '措施项目规律比对', '其他项目规律比对', '计价锁号比对'];
 const ALL_DEVICE_ITEMS = ['计算机名比对', '计算机用户名比对', '文件操作来源比对', '文件创建码比对', 'MAC地址比对', 'CPU序列号比对', '文件生成锁号比对', '硬盘序列号比对', '主板序列号比对', '机器特征码比对'];
 
 // Mock Data
 const INSPECTION_POINTS = [
-  { id: 1, title: '资信标比对', desc: '深度比对法人名称、法定代表人、盖章重复、联系方式及电子证照等关键资信信息。', icon: <Clock className="w-6 h-6 text-blue-500" /> },
+  { id: 1, title: '资信标比对', desc: '深度比对投标成员姓名、身份证、各类证书编号及业绩工程名称等关键资信信息。', icon: <Clock className="w-6 h-6 text-blue-500" /> },
   { id: 2, title: '技术标比对', desc: '基于自然语言处理，比对全文语句、表格文字、图片内容及敏感信息，支持过滤招标文件。', icon: <FileSearch className="w-6 h-6 text-emerald-500" /> },
   { id: 3, title: '经济标比对', desc: '精准提取并比对工程量清单、报价明细等核心经济数据。', icon: <Fingerprint className="w-6 h-6 text-amber-500" /> },
   { id: 4, title: '文件设备特征比对', desc: '识别生成文档的计算机MAC地址、硬盘序列号及Word属性等底层硬件特征。', icon: <Cpu className="w-6 h-6 text-purple-500" /> },
@@ -101,7 +101,7 @@ const DEFAULT_TEMPLATES = [
     desc: '仅检查资信标和设备特征，适用于初步筛选阶段。',
     config: {
       types: ['资信标比对', '文件设备特征比对'],
-      credit: ['法人名称', '法定代表人', '手机号', '电子证照'],
+      credit: ['投标成员姓名', '投标成员身份证', '建筑业企业资质证书证书编号', '安全生产许可证证书编号'],
       tech: [],
       economic: [],
       device: ['MAC地址比对', '计算机名比对'],
@@ -203,6 +203,10 @@ export default function App() {
   const [isExporting, setIsExporting] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
   const [economicTab, setEconomicTab] = useState<'attributes' | 'errors' | 'quotes' | 'quota' | 'materials'>('attributes');
+  const [selectedQuotePair, setSelectedQuotePair] = useState<{file1: string, file2: string} | null>(null);
+  const [selectedQuotaPair, setSelectedQuotaPair] = useState<{file1: string, file2: string} | null>(null);
+  const [selectedMaterialPair, setSelectedMaterialPair] = useState<{file1: string, file2: string} | null>(null);
+  const [selectedErrorPair, setSelectedErrorPair] = useState<{file1: string, file2: string} | null>({file1: '投标_符合性错误.SXTB4', file2: '投标_计算错误.SXTB4'});
   const [selectedUnreasonableMaterials, setSelectedUnreasonableMaterials] = useState<string[]>(['m2', 'm4']);
   const [priceRules, setPriceRules] = useState({
     comprehensive: '等比',
@@ -397,19 +401,63 @@ export default function App() {
 
   const getTasks = () => {
     const tasks = [];
-    if (selectedCheckTypes.includes('资信标比对') && selectedCreditItems.length > 0) {
+    const disabled = files.length > 0 ? getDisabledItems(files[0].name) : [];
+    const supported = files.length > 0 ? getSupportedCheckTypes(files[0].name) : ALL_CHECK_TYPES;
+
+    if (selectedCheckTypes.includes('资信标比对') && supported.includes('资信标比对') && selectedCreditItems.length > 0) {
       tasks.push({ type: '资信标比对', items: selectedCreditItems });
     }
-    if (selectedCheckTypes.includes('技术标比对') && selectedTechItems.length > 0) {
-      tasks.push({ type: '技术标比对', items: selectedTechItems });
+    if (selectedCheckTypes.includes('技术标比对') && supported.includes('技术标比对') && selectedTechItems.length > 0) {
+      const filteredTechItems = selectedTechItems.filter(item => !disabled.includes(item));
+      if (filteredTechItems.length > 0) {
+        tasks.push({ type: '技术标比对', items: filteredTechItems });
+      }
     }
-    if (selectedCheckTypes.includes('经济标比对') && selectedEconomicItems.length > 0) {
+    if (selectedCheckTypes.includes('经济标比对') && supported.includes('经济标比对') && selectedEconomicItems.length > 0) {
       tasks.push({ type: '经济标比对', items: selectedEconomicItems });
     }
-    if (selectedCheckTypes.includes('文件设备特征比对')) {
+    if (selectedCheckTypes.includes('文件设备特征比对') && supported.includes('文件设备特征比对')) {
       tasks.push({ type: '文件设备特征比对', items: ['底层硬件特征提取', 'MAC地址比对', '硬盘序列号比对'] });
     }
     return tasks;
+  };
+
+  const getFileSupportedTypes = (fileName: string) => {
+    const lowerName = fileName.toLowerCase();
+    if (lowerName.includes('清单') || lowerName.endsWith('.xml') || lowerName.endsWith('.xls') || lowerName.endsWith('.xlsx')) {
+      return ['经济标'];
+    } else if (lowerName.endsWith('.pdf')) {
+      return ['资信标', '技术标(不含属性)'];
+    } else if (lowerName.endsWith('.doc') || lowerName.endsWith('.docx')) {
+      return ['资信标', '技术标'];
+    } else if (lowerName.includes('非加密') || lowerName.includes('投标文件') || lowerName.endsWith('.tb') || lowerName.endsWith('.gef') || lowerName.endsWith('.nxztf')) {
+      return ['资信标', '经济标', '技术标', '文件设备特征'];
+    }
+    return ['资信标', '技术标']; // Default fallback
+  };
+
+  const getFileExtension = (filename: string) => {
+    const parts = filename.split('.');
+    return parts.length > 1 ? parts.pop()?.toLowerCase() || '' : '';
+  };
+
+  const getSupportedCheckTypes = (fileName: string) => {
+    const types = getFileSupportedTypes(fileName);
+    const checkTypes: string[] = [];
+    if (types.includes('资信标')) checkTypes.push('资信标比对');
+    if (types.includes('技术标') || types.includes('技术标(不含属性)')) checkTypes.push('技术标比对');
+    if (types.includes('经济标')) checkTypes.push('经济标比对');
+    if (types.includes('文件设备特征')) checkTypes.push('文件设备特征比对');
+    return checkTypes;
+  };
+
+  const getDisabledItems = (fileName: string) => {
+    const types = getFileSupportedTypes(fileName);
+    const disabledItems: string[] = [];
+    if (types.includes('技术标(不含属性)')) {
+      disabledItems.push('文档属性');
+    }
+    return disabledItems;
   };
 
   // Report Mock Data & Helpers
@@ -418,7 +466,26 @@ export default function App() {
     { id: 'f1', name: '投标文件A.pdf', size: 1024 * 1024 * 2, status: '已完成' },
     { id: 'f2', name: '投标文件B.pdf', size: 1024 * 1024 * 3, status: '已完成' }
   ] as FileItem[];
-  const creditItems = selectedCreditItems.length > 0 ? selectedCreditItems : ['法定代表人', '项目经理', '联系电话', '投标总价'];
+  
+  const matrixFiles = activeFiles.length > 0 ? activeFiles.filter(f => !f.name.includes('控制价')) : [
+    { id: 'm1', name: '中建一局-非加密投标文件.SXTB4' },
+    { id: 'm2', name: '中建二局-非加密投标文件.SXTB4' },
+    { id: 'm3', name: '中建三局-非加密投标文件.SXTB4' },
+    { id: 'm4', name: '中建四局-非加密投标文件.SXTB4' },
+    { id: 'm5', name: '中建五局-非加密投标文件.SXTB4' },
+    { id: 'm6', name: '中建六局-非加密投标文件.SXTB4' },
+    { id: 'm7', name: '中建七局-非加密投标文件.SXTB4' },
+    { id: 'm8', name: '中建八局-非加密投标文件.SXTB4' },
+  ];
+  const creditItems = selectedCreditItems.length > 0 ? selectedCreditItems : ['投标成员姓名', '投标成员身份证', '建筑业企业资质证书证书编号', '安全生产许可证证书编号'];
+
+  const availableCheckTypes = files.length > 0 
+    ? getSupportedCheckTypes(files[0].name)
+    : ALL_CHECK_TYPES;
+
+  const disabledItems = files.length > 0
+    ? getDisabledItems(files[0].name)
+    : [];
 
   useEffect(() => {
     if (currentPage === 'report' && comparingFiles.length >= 2) {
@@ -481,10 +548,16 @@ export default function App() {
     id: f.id,
     name: f.name,
     values: creditItems.map((item, j) => {
-      if (item === '联系电话') return i % 2 === 0 ? '13812345678' : '13987654321';
-      if (item === '项目经理') return i === 0 || i === 2 ? '张建国' : '李伟';
-      if (item === '法定代表人') return i === 1 || i === 3 ? '王大拿' : '赵四';
-      if (item === '投标总价') return `${(1500 + i * 10).toLocaleString()} 万元`;
+      if (item === '投标成员姓名') return i === 0 || i === 2 ? '张建国' : '李伟';
+      if (item === '投标成员身份证') return i === 0 || i === 2 ? '110105198001011234' : '110105199001015678';
+      if (item === '建筑业企业资质证书证书编号') return i % 2 === 0 ? 'D211012345' : 'D211098765';
+      if (item === '安全生产许可证证书编号') return i === 1 || i === 3 ? '京JZ安许证字[2026]001234' : '京JZ安许证字[2026]005678';
+      if (item === '建筑师注册证书注册编号') return i % 2 === 0 ? '京111202612345' : '京111202698765';
+      if (item === '安全生产考核合格证书编号') return i === 0 || i === 2 ? '京建安B(2026)0012345' : '京建安B(2026)0098765';
+      if (item === '专业建筑资格证书管理号') return i % 2 === 0 ? '00123456' : '00987654';
+      if (item === '职业培训合格证证书编号') return i === 1 || i === 3 ? 'PX2026001234' : 'PX2026005678';
+      if (item === '项目经理身份证号雷同') return i === 0 || i === 2 ? '110105198001011234' : '110105199001015678';
+      if (item === '业绩工程名称雷同') return i % 2 === 0 ? '某市第一人民医院门诊楼新建工程' : '某住宅楼项目';
       return `合规数据 ${i}-${j}`;
     })
   }));
@@ -515,43 +588,13 @@ export default function App() {
   const mockErrorConsistencyData = [
     {
       id: 'err-1',
-      code: '010101003001',
-      name: '挖土方',
-      reason: '项目特征描述拼写错误',
-      errorItem: '挖土放',
-      correctItem: '挖土方',
-      files: ['文件A_经济标.GBQ6', '文件C_经济标.GBQ6'],
-      tab: '分部分项'
-    },
-    {
-      id: 'err-2',
-      code: '010501001001',
-      name: '垫层',
-      reason: '材质描述缺失',
-      errorItem: '150mm厚C15混凝土',
-      correctItem: '150mm厚C15素混凝土',
-      files: ['文件A_经济标.GBQ6', '文件C_经济标.GBQ6'],
-      tab: '分部分项'
-    },
-    {
-      id: 'err-3',
-      code: '040101001001',
-      name: '安全文明施工费',
-      reason: '费率计算基数错误',
-      errorItem: '分部分项工程费',
-      correctItem: '定额人工费+定额机械费',
-      files: ['文件B_经济标.GBQ6', '文件C_经济标.GBQ6'],
-      tab: '措施项目'
-    },
-    {
-      id: 'err-4',
-      code: '010401001001',
-      name: '实心砖墙',
-      reason: '砂浆标号错误',
-      errorItem: 'M5混合砂浆',
-      correctItem: 'M7.5混合砂浆',
-      files: ['文件A_经济标.GBQ6', '文件B_经济标.GBQ6', '文件C_经济标.GBQ6'],
-      tab: '分部分项'
+      code: '暂列1',
+      name: '暂列金额',
+      reason: '金额不匹配',
+      errorItem: '1000.51',
+      correctItem: '1000',
+      files: ['投标_符合性错误.SXTB4', '投标_计算错误.SXTB4'],
+      tab: '其他项目'
     }
   ];
 
@@ -559,6 +602,153 @@ export default function App() {
     { pair: '文件A vs 文件B', similarity: '85.5%', identicalItems: 125, totalItems: 146 },
     { pair: '文件A vs 文件C', similarity: '92.0%', identicalItems: 135, totalItems: 146 },
     { pair: '文件B vs 文件C', similarity: '78.2%', identicalItems: 114, totalItems: 146 },
+  ];
+
+  const mockQuotaDetails = [
+    {
+      id: 'root-1',
+      code: '',
+      name: '招标',
+      unit: '',
+      features: '',
+      price1: '',
+      price2: '',
+      level: 0,
+      hasChildren: true
+    },
+    {
+      id: 'item-10',
+      code: '',
+      name: '单项10',
+      unit: '',
+      features: '',
+      price1: '',
+      price2: '',
+      level: 1,
+      hasChildren: true
+    },
+    {
+      id: 'civil-a',
+      code: '',
+      name: 'A土建',
+      unit: '',
+      features: '',
+      price1: '',
+      price2: '',
+      level: 2,
+      hasChildren: true
+    },
+    {
+      id: 'list-1',
+      code: '010101001001',
+      name: '清单名称 清单名称1',
+      unit: 'm3',
+      features: '1、土的类别：1',
+      price1: '',
+      price2: '',
+      level: 3,
+      hasChildren: true
+    },
+    {
+      id: 'sub-1-1',
+      code: '1-1',
+      name: '人工挖一般土方（基深）一、二类土 ≤2m',
+      unit: '10m3',
+      features: '',
+      price1: '191.06',
+      price2: '191.06',
+      level: 4,
+      hasChildren: false
+    },
+    {
+      id: 'sub-1-2',
+      code: '1-2',
+      name: '人工挖一般土方（基深）一、二类土 ≤4m',
+      unit: '10m3',
+      features: '',
+      price1: '335.39',
+      price2: '335.39',
+      level: 4,
+      hasChildren: false
+    },
+    {
+      id: 'sub-1-3',
+      code: '1-3',
+      name: '人工挖一般土方（基深）三类土 ≤2m',
+      unit: '10m3',
+      features: '',
+      price1: '337.67',
+      price2: '337.67',
+      level: 4,
+      hasChildren: false
+    },
+    {
+      id: 'list-2',
+      code: '010101002001',
+      name: '挖单独石方',
+      unit: 'm3',
+      features: '1、清单特征 2、清单特征1',
+      price1: '',
+      price2: '',
+      level: 3,
+      hasChildren: true
+    },
+    {
+      id: 'sub-1-4',
+      code: '1-4',
+      name: '人工挖一般土方（基深）三类土 ≤4m',
+      unit: '10m3',
+      features: '',
+      price1: '563.03',
+      price2: '563.03',
+      level: 4,
+      hasChildren: false
+    }
+  ];
+
+  const mockQuoteDetails = [
+    {
+      id: '1',
+      code: '010101002001',
+      name: '挖单独石方',
+      category: '',
+      unit: 'm3',
+      features: '1、清单特征 2、清单特征1',
+      price1: 175.58,
+      price2: 175.58,
+      ratio: 1,
+      project: '新增四级分部-A.1 单独土石方',
+      regularityList: true,
+      regularityQuota: true
+    },
+    {
+      id: '2',
+      code: '010101003001',
+      name: '单独土方回填',
+      category: '',
+      unit: 'm3',
+      features: '1、材料品种：种类1 2、密实度：紧密',
+      price1: 108.6,
+      price2: 108.6,
+      ratio: 1,
+      project: '新增四级分部-A.1 单独土石方',
+      regularityList: true,
+      regularityQuota: true
+    },
+    {
+      id: '3',
+      code: '010102001001',
+      name: '挖一般土方',
+      category: '',
+      unit: 'QDm31',
+      features: '1、土的类别：2 2、开挖深度：20m 3、基底',
+      price1: 240.7,
+      price2: 240.7,
+      ratio: 1,
+      project: '新增四级分部-A.1 单独土石方',
+      regularityList: true,
+      regularityQuota: false
+    }
   ];
 
   const mockPriceItems = [
@@ -673,43 +863,83 @@ export default function App() {
   const mockMaterialsData = [
     {
       id: 'm1',
-      code: '010101001',
+      code: '000101000',
       category: '人工',
-      name: '综合工日',
-      spec: '-',
+      name: '综合一类工',
+      spec: '',
       unit: '工日',
-      priceA: 120.00,
-      priceB: 120.00,
+      priceA: 29.75,
+      priceB: 29.75,
     },
     {
       id: 'm2',
-      code: '040101001',
+      code: '340309001',
       category: '材料',
-      name: 'C30商品混凝土',
-      spec: '碎石粒径≤31.5mm',
-      unit: 'm³',
-      priceA: 450.00,
-      priceB: 450.00,
+      name: '电雷管',
+      spec: '',
+      unit: '个',
+      priceA: 0.7,
+      priceB: 0.7,
     },
     {
       id: 'm3',
-      code: '040301005',
+      code: '340305002',
       category: '材料',
-      name: 'HPB300钢筋',
-      spec: '综合',
-      unit: 't',
-      priceA: 4200.00,
-      priceB: 4200.00,
+      name: '乳化炸药',
+      spec: '',
+      unit: 'kg',
+      priceA: 1.65,
+      priceB: 1.65,
     },
     {
       id: 'm4',
-      code: '080101001',
-      category: '机械',
-      name: '塔式起重机',
-      spec: '起重力矩600kN·m',
-      unit: '台班',
-      priceA: 850.00,
-      priceB: 850.00,
+      code: '011505001',
+      category: '材料',
+      name: '六角空心钢(综合)',
+      spec: '',
+      unit: 'kg',
+      priceA: 0.7,
+      priceB: 0.7,
+    },
+    {
+      id: 'm5',
+      code: '031519016',
+      category: '材料',
+      name: '合金钢钻头',
+      spec: '',
+      unit: '个',
+      priceA: 1.15,
+      priceB: 1.15,
+    },
+    {
+      id: 'm6',
+      code: '280301003',
+      category: '材料',
+      name: '铜芯塑料绝缘电线 BV-1.5mm2',
+      spec: '',
+      unit: 'm',
+      priceA: 0.21,
+      priceB: 0.21,
+    },
+    {
+      id: 'm7',
+      code: '280301004',
+      category: '材料',
+      name: '铜芯塑料绝缘电线 BV-2.5mm2',
+      spec: '',
+      unit: 'm',
+      priceA: 0.33,
+      priceB: 0.33,
+    },
+    {
+      id: 'm8',
+      code: 'CL-D00001',
+      category: '材料',
+      name: '补充清单',
+      spec: '',
+      unit: 'm',
+      priceA: 36.08,
+      priceB: 36.08,
     }
   ];
 
@@ -1120,20 +1350,6 @@ export default function App() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const getFileSupportedTypes = (fileName: string) => {
-    const lowerName = fileName.toLowerCase();
-    if (lowerName.includes('清单') || lowerName.endsWith('.xml') || lowerName.endsWith('.xls') || lowerName.endsWith('.xlsx')) {
-      return ['经济标'];
-    } else if (lowerName.endsWith('.pdf')) {
-      return ['资信标', '技术标(不含属性)'];
-    } else if (lowerName.endsWith('.doc') || lowerName.endsWith('.docx')) {
-      return ['资信标', '技术标'];
-    } else if (lowerName.includes('非加密') || lowerName.includes('投标文件') || lowerName.endsWith('.tb') || lowerName.endsWith('.gef')) {
-      return ['资信标', '经济标', '技术标', '文件设备特征'];
-    }
-    return ['资信标', '技术标']; // Default fallback
-  };
-
   const getTypeColorClass = (type: string) => {
     switch (type) {
       case '资信标': return 'bg-blue-50 text-blue-600 border-blue-100';
@@ -1151,11 +1367,30 @@ export default function App() {
     // If starting a new project from home, clear existing files
     const existingFiles = currentPage === 'home' ? [] : files;
     
+    const fileArray = Array.from(newFiles);
+    if (fileArray.length === 0) return;
+
+    // Determine target extension
+    let targetExt = '';
+    if (existingFiles.length > 0) {
+      targetExt = getFileExtension(existingFiles[0].name);
+    } else {
+      targetExt = getFileExtension(fileArray[0].name);
+    }
+
+    // Check extensions
+    for (const file of fileArray) {
+      const ext = getFileExtension(file.name);
+      if (ext !== targetExt) {
+        const extDisplay = targetExt ? `.${targetExt}` : '无后缀';
+        setErrorMsg(`每次只允许上传同一后缀的文件 (当前需要 ${extDisplay} 文件)`);
+        return;
+      }
+    }
+
     const currentTotalSize = existingFiles.reduce((acc, f) => acc + f.size, 0);
     let newTotalSize = currentTotalSize;
     const validFiles: FileItem[] = [];
-
-    const fileArray = Array.from(newFiles);
 
     if (existingFiles.length + fileArray.length > MAX_FILES) {
       setErrorMsg(`最多只能上传 ${MAX_FILES} 个文件`);
@@ -1180,6 +1415,13 @@ export default function App() {
 
     const updatedFiles = [...existingFiles, ...validFiles];
     setFiles(updatedFiles);
+
+    // Filter out unsupported check types based on the newly added files
+    const supported = getSupportedCheckTypes(updatedFiles[0].name);
+    setSelectedCheckTypes(prev => prev.filter(t => supported.includes(t)));
+
+    const disabled = getDisabledItems(updatedFiles[0].name);
+    setSelectedTechItems(prev => prev.filter(item => !disabled.includes(item)));
 
     // If coming from home page, set project name and navigate
     if (currentPage === 'home' && validFiles.length > 0) {
@@ -1689,14 +1931,14 @@ export default function App() {
                     <button 
                       onClick={() => {
                         const testFiles = [
-                          { name: '投标企业A-非加密投标文件.tb', size: 1024 * 1024 * 15 },
-                          { name: '投标企业B-非加密投标文件.gef', size: 1024 * 1024 * 14 },
-                          { name: '投标企业A-工程量清单.xml', size: 1024 * 1024 * 2 },
-                          { name: '投标企业B-已标价工程量清单.xlsx', size: 1024 * 1024 * 3 },
-                          { name: '投标企业A-技术标.pdf', size: 1024 * 1024 * 8 },
-                          { name: '投标企业B-施工组织设计.pdf', size: 1024 * 1024 * 9 },
-                          { name: '投标企业A-资信标.docx', size: 1024 * 1024 * 5 },
-                          { name: '投标企业B-商务标.doc', size: 1024 * 1024 * 4 }
+                          { name: '中建一局-非加密投标文件.gef', size: 1024 * 1024 * 15 },
+                          { name: '中建二局-非加密投标文件.gef', size: 1024 * 1024 * 14 },
+                          { name: '中建三局-非加密投标文件.gef', size: 1024 * 1024 * 16 },
+                          { name: '中建四局-非加密投标文件.gef', size: 1024 * 1024 * 12 },
+                          { name: '中建五局-非加密投标文件.gef', size: 1024 * 1024 * 18 },
+                          { name: '中建六局-非加密投标文件.gef', size: 1024 * 1024 * 13 },
+                          { name: '中建七局-非加密投标文件.gef', size: 1024 * 1024 * 15 },
+                          { name: '中建八局-非加密投标文件.gef', size: 1024 * 1024 * 17 }
                         ];
                         const mockFileList = testFiles.map(f => new window.File([new ArrayBuffer(f.size)], f.name, { type: 'application/octet-stream' }));
                         processFiles(mockFileList);
@@ -2180,15 +2422,6 @@ export default function App() {
                                 <p className="text-sm font-medium text-slate-700 truncate">{file.name}</p>
                                 <div className="flex items-center gap-2 mt-0.5">
                                   <p className="text-xs text-slate-400">{formatSize(file.size)}</p>
-                                  {file.supportedTypes && file.supportedTypes.length > 0 && (
-                                    <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-                                      {file.supportedTypes.map((type, idx) => (
-                                        <span key={idx} className={`text-[10px] px-1.5 py-0.5 rounded border whitespace-nowrap ${getTypeColorClass(type)}`}>
-                                          {type}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  )}
                                 </div>
                               </div>
                             </div>
@@ -2239,20 +2472,23 @@ export default function App() {
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-6">
-                        {ALL_CHECK_TYPES.map(type => (
-                          <label key={type} className="flex items-center gap-2.5 cursor-pointer group">
+                        {ALL_CHECK_TYPES.map(type => {
+                          const isSupported = availableCheckTypes.includes(type);
+                          return (
+                          <label key={type} className={`flex items-center gap-2.5 ${isSupported ? 'cursor-pointer group' : 'cursor-not-allowed opacity-50'}`}>
                             <div className="relative flex items-center justify-center">
                               <input 
                                 type="checkbox" 
-                                className="peer appearance-none w-5 h-5 border-2 border-slate-300 rounded-md checked:bg-indigo-600 checked:border-indigo-600 transition-colors cursor-pointer"
-                                checked={selectedCheckTypes.includes(type)}
+                                className="peer appearance-none w-5 h-5 border-2 border-slate-300 rounded-md checked:bg-indigo-600 checked:border-indigo-600 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                                checked={selectedCheckTypes.includes(type) && isSupported}
                                 onChange={() => handleCheckTypeToggle(type)}
+                                disabled={!isSupported}
                               />
                               <Check className="w-3.5 h-3.5 text-white absolute opacity-0 peer-checked:opacity-100 pointer-events-none" />
                             </div>
-                            <span className="text-sm font-medium text-slate-700 group-hover:text-indigo-600 transition-colors">{type}</span>
+                            <span className={`text-sm font-medium ${isSupported ? 'text-slate-700 group-hover:text-indigo-600' : 'text-slate-500'} transition-colors`}>{type}</span>
                           </label>
-                        ))}
+                        )})}
                       </div>
                     </div>
 
@@ -2278,17 +2514,20 @@ export default function App() {
                     <div className={`transition-opacity duration-200 ${selectedCheckTypes.includes('技术标比对') ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
                       <h3 className="text-sm font-semibold text-slate-800 mb-4 border-l-4 border-emerald-500 pl-2">技术标比对项</h3>
                       <div className="flex flex-wrap gap-x-6 gap-y-4 bg-slate-50 p-4 rounded-lg border border-slate-100">
-                        {ALL_TECH_ITEMS.map(item => (
-                          <label key={item} className="flex items-center gap-2 cursor-pointer group">
+                        {ALL_TECH_ITEMS.map(item => {
+                          const isDisabled = disabledItems.includes(item);
+                          return (
+                          <label key={item} className={`flex items-center gap-2 ${isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer group'}`}>
                             <input 
                               type="checkbox" 
-                              className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                              checked={selectedTechItems.includes(item)}
+                              className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:cursor-not-allowed"
+                              checked={selectedTechItems.includes(item) && !isDisabled}
                               onChange={() => handleItemToggle(item, selectedTechItems, setSelectedTechItems, '技术标比对')}
+                              disabled={isDisabled}
                             />
-                            <span className="text-sm text-slate-600 group-hover:text-slate-900">{item}</span>
+                            <span className={`text-sm ${isDisabled ? 'text-slate-500' : 'text-slate-600 group-hover:text-slate-900'}`}>{item}</span>
                           </label>
-                        ))}
+                        )})}
                       </div>
                     </div>
 
@@ -3077,174 +3316,85 @@ export default function App() {
                     <div className="space-y-4">
                       {isExporting && <h3 className="text-xl font-bold text-slate-800 mt-6 border-b pb-2">项目属性分析（软硬件信息）</h3>}
                       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex justify-between items-center">
-                        <div>
-                          <h3 className="font-bold text-slate-800 flex items-center gap-2"><Fingerprint className="w-5 h-5 text-amber-500"/> 项目属性分析（软硬件信息）</h3>
-                          <p className="text-sm text-slate-500 mt-1">提取计价软件底层特征，比对加密锁号、MAC地址、硬盘序列号及计算机名。</p>
-                        </div>
                         <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-slate-700">隐藏招标/控制价文件信息</span>
+                          <label className="flex items-center gap-2 cursor-pointer">
                             <input 
                               type="checkbox" 
-                              id="showOnlyDuplicates" 
-                              checked={showOnlyDuplicates} 
-                              onChange={(e) => setShowOnlyDuplicates(e.target.checked)} 
-                              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                              checked={!showBiddingFiles} 
+                              onChange={(e) => setShowBiddingFiles(!e.target.checked)} 
+                              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                             />
-                            <label htmlFor="showOnlyDuplicates" className="text-sm text-slate-600 cursor-pointer">仅显示重复项</label>
-                          </div>
-                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-slate-600">是</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer">
                             <input 
                               type="checkbox" 
-                              id="showBiddingFiles" 
                               checked={showBiddingFiles} 
                               onChange={(e) => setShowBiddingFiles(e.target.checked)} 
-                              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                             />
-                            <label htmlFor="showBiddingFiles" className="text-sm text-slate-600 cursor-pointer">显示招标及控制价文件</label>
-                          </div>
+                            <span className="text-sm text-slate-600">否</span>
+                          </label>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* 加密锁号 */}
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-                          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                            <h4 className="font-bold text-slate-800">加密锁号</h4>
-                            <span className="text-xs font-medium text-slate-500 bg-slate-200 px-2 py-1 rounded-full">
-                              去重个数: {mockHardwareData.dongles.filter(d => showBiddingFiles || !d.isBidding).length}
-                            </span>
-                          </div>
-                          <div className="p-0 flex-1 flex flex-col">
-                            {mockHardwareData.dongles.filter(d => (showBiddingFiles || !d.isBidding) && (!showOnlyDuplicates || d.files.length > 1)).length === 0 ? (
-                              <div className="flex-1 flex flex-col items-center justify-center p-8 text-slate-400">
-                                <CheckCircle className="w-8 h-8 mb-2 text-emerald-400" />
-                                <p className="text-sm">未发现重复的加密锁号</p>
-                              </div>
-                            ) : (
-                              <ul className="divide-y divide-slate-100">
-                                {mockHardwareData.dongles.filter(d => (showBiddingFiles || !d.isBidding) && (!showOnlyDuplicates || d.files.length > 1)).map((item, idx) => (
-                                  <li key={idx} className="p-4 hover:bg-slate-50 transition-colors">
-                                    <div className={`font-mono font-medium mb-2 ${item.files.length > 1 ? 'text-red-600' : 'text-slate-800'}`}>
-                                      {item.id}
-                                    </div>
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {item.files.map((f, fIdx) => (
-                                        <span key={fIdx} className="text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded border border-slate-200">
-                                          {f}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* MAC地址 */}
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-                          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                            <h4 className="font-bold text-slate-800">MAC地址</h4>
-                            <span className="text-xs font-medium text-slate-500 bg-slate-200 px-2 py-1 rounded-full">
-                              去重个数: {mockHardwareData.macs.filter(d => showBiddingFiles || !d.isBidding).length}
-                            </span>
-                          </div>
-                          <div className="p-0 flex-1 flex flex-col">
-                            {mockHardwareData.macs.filter(d => (showBiddingFiles || !d.isBidding) && (!showOnlyDuplicates || d.files.length > 1)).length === 0 ? (
-                              <div className="flex-1 flex flex-col items-center justify-center p-8 text-slate-400">
-                                <CheckCircle className="w-8 h-8 mb-2 text-emerald-400" />
-                                <p className="text-sm">未发现重复的MAC地址</p>
-                              </div>
-                            ) : (
-                              <ul className="divide-y divide-slate-100">
-                                {mockHardwareData.macs.filter(d => (showBiddingFiles || !d.isBidding) && (!showOnlyDuplicates || d.files.length > 1)).map((item, idx) => (
-                                  <li key={idx} className="p-4 hover:bg-slate-50 transition-colors">
-                                    <div className={`font-mono font-medium mb-2 ${item.files.length > 1 ? 'text-red-600' : 'text-slate-800'}`}>
-                                      {item.id}
-                                    </div>
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {item.files.map((f, fIdx) => (
-                                        <span key={fIdx} className="text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded border border-slate-200">
-                                          {f}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* 硬盘序列号 */}
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-                          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                            <h4 className="font-bold text-slate-800">硬盘序列号</h4>
-                            <span className="text-xs font-medium text-slate-500 bg-slate-200 px-2 py-1 rounded-full">
-                              去重个数: {mockHardwareData.hdds.filter(d => showBiddingFiles || !d.isBidding).length}
-                            </span>
-                          </div>
-                          <div className="p-0 flex-1 flex flex-col">
-                            {mockHardwareData.hdds.filter(d => (showBiddingFiles || !d.isBidding) && (!showOnlyDuplicates || d.files.length > 1)).length === 0 ? (
-                              <div className="flex-1 flex flex-col items-center justify-center p-8 text-slate-400">
-                                <CheckCircle className="w-8 h-8 mb-2 text-emerald-400" />
-                                <p className="text-sm">未发现重复的硬盘序列号</p>
-                              </div>
-                            ) : (
-                              <ul className="divide-y divide-slate-100">
-                                {mockHardwareData.hdds.filter(d => (showBiddingFiles || !d.isBidding) && (!showOnlyDuplicates || d.files.length > 1)).map((item, idx) => (
-                                  <li key={idx} className="p-4 hover:bg-slate-50 transition-colors">
-                                    <div className={`font-mono font-medium mb-2 ${item.files.length > 1 ? 'text-red-600' : 'text-slate-800'}`}>
-                                      {item.id}
-                                    </div>
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {item.files.map((f, fIdx) => (
-                                        <span key={fIdx} className="text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded border border-slate-200">
-                                          {f}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* 计算机名 */}
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-                          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                            <h4 className="font-bold text-slate-800">计算机名</h4>
-                            <span className="text-xs font-medium text-slate-500 bg-slate-200 px-2 py-1 rounded-full">
-                              去重个数: {mockHardwareData.computers.filter(d => showBiddingFiles || !d.isBidding).length}
-                            </span>
-                          </div>
-                          <div className="p-0 flex-1 flex flex-col">
-                            {mockHardwareData.computers.filter(d => (showBiddingFiles || !d.isBidding) && (!showOnlyDuplicates || d.files.length > 1)).length === 0 ? (
-                              <div className="flex-1 flex flex-col items-center justify-center p-8 text-slate-400">
-                                <CheckCircle className="w-8 h-8 mb-2 text-emerald-400" />
-                                <p className="text-sm">未发现重复的计算机名</p>
-                              </div>
-                            ) : (
-                              <ul className="divide-y divide-slate-100">
-                                {mockHardwareData.computers.filter(d => (showBiddingFiles || !d.isBidding) && (!showOnlyDuplicates || d.files.length > 1)).map((item, idx) => (
-                                  <li key={idx} className="p-4 hover:bg-slate-50 transition-colors">
-                                    <div className={`font-mono font-medium mb-2 ${item.files.length > 1 ? 'text-red-600' : 'text-slate-800'}`}>
-                                      {item.id}
-                                    </div>
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {item.files.map((f, fIdx) => (
-                                        <span key={fIdx} className="text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded border border-slate-200">
-                                          {f}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        </div>
+                      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                          <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
+                            <tr>
+                              <th className="py-3 px-4 font-medium whitespace-nowrap text-center">序号</th>
+                              <th className="py-3 px-4 font-medium whitespace-nowrap text-center">单位名称</th>
+                              <th className="py-3 px-4 font-medium whitespace-nowrap text-center">投标总价</th>
+                              <th className="py-3 px-4 font-medium whitespace-nowrap text-center">实名信息</th>
+                              <th className="py-3 px-4 font-medium whitespace-nowrap text-center">加密锁数量</th>
+                              <th className="py-3 px-4 font-medium whitespace-nowrap text-center">加密锁号</th>
+                              <th className="py-3 px-4 font-medium whitespace-nowrap text-center">锁号一致性文件</th>
+                              <th className="py-3 px-4 font-medium whitespace-nowrap text-center">网卡MAC地址数量</th>
+                              <th className="py-3 px-4 font-medium whitespace-nowrap text-center">网卡MAC地址</th>
+                              <th className="py-3 px-4 font-medium whitespace-nowrap text-center">网卡MAC地址一致性文件</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {comparingFiles.filter(f => showBiddingFiles || !f.name.includes('控制价')).map((file, idx) => {
+                              // Mock data based on the image
+                              const isDup = idx < 2; // Make first two files have duplicates
+                              const lockNum1 = '9733c80100070206b90a0006002d0010';
+                              const lockNum2 = '9733c80100070206b90a000600330013';
+                              const lockNum3 = '9733c80100070206b90a000600330014';
+                              const mac = 'B4-A9-FC-B5-8C-72';
+                              const dupFiles = '投标_符合性错误.SXTB4,投标_计算错误.SXTB4';
+                              
+                              return (
+                                <tr key={file.id} className="hover:bg-slate-50 transition-colors">
+                                  <td className="py-4 px-4 text-center text-slate-500">{idx + 1}</td>
+                                  <td className="py-4 px-4 text-center text-slate-800">{file.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4')}</td>
+                                  <td className="py-4 px-4 text-center text-slate-600">11500000.36</td>
+                                  <td className="py-4 px-4 text-center text-slate-600">111</td>
+                                  <td className={`py-4 px-4 text-center ${isDup ? 'text-red-500' : 'text-slate-600'}`}>{isDup ? 2 : 1}</td>
+                                  <td className={`py-4 px-4 text-center ${isDup ? 'text-red-500' : 'text-slate-600'}`}>
+                                    {isDup ? (
+                                      <div className="flex flex-col gap-1">
+                                        <span>{lockNum1}</span>
+                                        <span>{idx === 0 ? lockNum2 : lockNum3}</span>
+                                      </div>
+                                    ) : (
+                                      <span>{lockNum1}</span>
+                                    )}
+                                  </td>
+                                  <td className={`py-4 px-4 text-center ${isDup ? 'text-red-500' : 'text-slate-600'}`}>
+                                    {isDup ? dupFiles : '-'}
+                                  </td>
+                                  <td className={`py-4 px-4 text-center ${isDup ? 'text-red-500' : 'text-slate-600'}`}>{isDup ? 1 : 1}</td>
+                                  <td className={`py-4 px-4 text-center ${isDup ? 'text-red-500' : 'text-slate-600'}`}>{isDup ? mac : '00-1A-2B-3C-4D-5E'}</td>
+                                  <td className={`py-4 px-4 text-center ${isDup ? 'text-red-500' : 'text-slate-600'}`}>
+                                    {isDup ? dupFiles : '-'}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   )}
@@ -3252,93 +3402,77 @@ export default function App() {
                   {(economicTab === 'errors' || isExporting) && (
                     <div className="space-y-4">
                       {isExporting && <h3 className="text-xl font-bold text-slate-800 mt-6 border-b pb-2">错误一致性分析</h3>}
-                      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col gap-4 relative">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                              <AlertTriangle className="w-5 h-5 text-amber-500"/> 
-                              错误一致性分析
-                            </h3>
-                            <p className="text-sm text-slate-500 mt-1">对比不同投标文件的相同错误项，包含工程量清单所有tab检查项。</p>
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <div className="text-center">
-                              <div className="text-3xl font-bold text-slate-800 relative inline-block">
-                                {mockErrorConsistencyData.length}
-                                {Object.values(unreasonableErrors).filter((e: any) => e.checked).length > 0 && (
-                                  <span 
-                                    className="absolute -top-2 -right-4 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full cursor-help"
-                                    title={`已标记 ${Object.values(unreasonableErrors).filter((e: any) => e.checked).length} 个不合理项`}
-                                  >
-                                    {Object.values(unreasonableErrors).filter((e: any) => e.checked).length}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-xs text-slate-500 mt-1">相同错误总数</div>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
-                          <h4 className="text-sm font-bold text-slate-700 mb-3">各文件相同错误比较</h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                            <div className="bg-white p-3 rounded border border-slate-200 shadow-sm flex justify-between items-center">
-                              <div className="text-xs text-slate-600">文件A vs 文件C</div>
-                              <div className="text-sm font-bold text-slate-800">2 处</div>
-                            </div>
-                            <div className="bg-white p-3 rounded border border-slate-200 shadow-sm flex justify-between items-center">
-                              <div className="text-xs text-slate-600">文件B vs 文件C</div>
-                              <div className="text-sm font-bold text-slate-800">1 处</div>
-                            </div>
-                            <div className="bg-white p-3 rounded border border-slate-200 shadow-sm flex justify-between items-center">
-                              <div className="text-xs text-slate-600">文件A vs 文件B vs 文件C</div>
-                              <div className="text-sm font-bold text-slate-800">1 处</div>
-                            </div>
-                          </div>
-                        </div>
+                      
+                      {/* Matrix Table */}
+                      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+                        <table className="w-full text-center text-sm">
+                          <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
+                            <tr>
+                              <th className="py-3 px-4 font-medium whitespace-nowrap border-r border-slate-200">投标单位名称</th>
+                              {comparingFiles.filter(f => !f.name.includes('控制价')).map(f => (
+                                <th key={f.id} className="py-3 px-4 font-medium whitespace-nowrap text-blue-500">{f.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4')}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {comparingFiles.filter(f => !f.name.includes('控制价')).map((rowFile) => (
+                              <tr key={rowFile.id} className="hover:bg-slate-50 transition-colors">
+                                <td className="py-3 px-4 text-blue-500 text-left border-r border-slate-200">{rowFile.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4')}</td>
+                                {comparingFiles.filter(f => !f.name.includes('控制价')).map((colFile) => {
+                                  const isSelf = rowFile.id === colFile.id;
+                                  const isSelected = selectedErrorPair?.file1 === rowFile.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4') && selectedErrorPair?.file2 === colFile.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4');
+                                  // Mock logic: 1 error between the first two files
+                                  const hasError = !isSelf && (rowFile.id === comparingFiles[0].id && colFile.id === comparingFiles[1].id || rowFile.id === comparingFiles[1].id && colFile.id === comparingFiles[0].id);
+                                  
+                                  return (
+                                    <td 
+                                      key={colFile.id} 
+                                      className={`py-3 px-4 cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 text-blue-600 font-bold' : hasError ? 'text-blue-500 hover:bg-slate-100' : 'text-slate-400'}`}
+                                      onClick={() => {
+                                        if (!isSelf) {
+                                          setSelectedErrorPair({
+                                            file1: rowFile.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4'),
+                                            file2: colFile.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4')
+                                          });
+                                        }
+                                      }}
+                                    >
+                                      {isSelf ? '-' : (hasError ? '1' : '-')}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
 
-                      <div className="grid grid-cols-1 gap-4">
-                        {mockErrorConsistencyData.map((item) => (
-                          <div key={item.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-start">
-                              <div>
-                                <div className="flex items-center gap-3 mb-2">
-                                  <h4 className="font-bold text-slate-800 text-lg">{item.name}</h4>
-                                  <span className="font-mono text-indigo-600 text-sm bg-indigo-50 px-2 py-0.5 rounded">{item.code}</span>
-                                  <span className="text-xs font-medium text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">{item.tab}</span>
-                                </div>
-                                <div className="text-sm text-slate-600">
-                                  <span className="font-medium text-slate-700">不符合原因：</span>{item.reason}
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-xs text-slate-500 mb-1">涉及文件 ({item.files.length})</div>
-                                <div className="flex flex-col items-end gap-1">
-                                  {item.files.map((f, idx) => (
-                                    <span key={idx} className="text-sm font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded">{f}</span>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="p-5 bg-white">
-                              <div className="grid grid-cols-2 gap-4 mb-4">
-                                <div className="bg-red-50/50 border border-red-100 rounded-lg p-4">
-                                  <div className="text-xs font-bold text-red-500 uppercase tracking-wider mb-2">错误项</div>
-                                  <div className="text-sm text-slate-800 font-medium">{item.errorItem}</div>
-                                </div>
-                                <div className="bg-emerald-50/50 border border-emerald-100 rounded-lg p-4">
-                                  <div className="text-xs font-bold text-emerald-500 uppercase tracking-wider mb-2">正确项</div>
-                                  <div className="text-sm text-slate-800 font-medium">{item.correctItem}</div>
-                                </div>
-                              </div>
-                              
-                              {/* 不合理项标记 */}
-                              <div className="mt-4 pt-4 border-t border-slate-100">
-                                <label className="flex items-center gap-2 cursor-pointer w-max">
+                      {/* Detailed Table */}
+                      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+                        <table className="w-full text-center text-sm">
+                          <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
+                            <tr>
+                              <th className="py-3 px-4 font-medium whitespace-nowrap">错误内容</th>
+                              <th className="py-3 px-4 font-medium whitespace-nowrap">编码名称</th>
+                              <th className="py-3 px-4 font-medium whitespace-nowrap">不符合原因</th>
+                              <th className="py-3 px-4 font-medium whitespace-nowrap">错误项</th>
+                              <th className="py-3 px-4 font-medium whitespace-nowrap">正确项</th>
+                              <th className="py-3 px-4 font-medium whitespace-nowrap">不合理项</th>
+                              <th className="py-3 px-4 font-medium whitespace-nowrap">不合理原因</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {mockErrorConsistencyData.map((item) => (
+                              <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                                <td className="py-3 px-4 text-slate-800">{item.name}</td>
+                                <td className="py-3 px-4 text-slate-600">{item.code}</td>
+                                <td className="py-3 px-4 text-slate-600">{item.reason}</td>
+                                <td className="py-3 px-4 text-slate-800">{item.errorItem}</td>
+                                <td className="py-3 px-4 text-slate-800">{item.correctItem}</td>
+                                <td className="py-3 px-4">
                                   <input 
                                     type="checkbox" 
-                                    className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                                    className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
                                     checked={unreasonableErrors[item.id]?.checked || false}
                                     onChange={(e) => {
                                       setUnreasonableErrors(prev => ({
@@ -3350,15 +3484,12 @@ export default function App() {
                                       }));
                                     }}
                                   />
-                                  <span className="text-sm font-medium text-slate-700">标记为不合理项</span>
-                                </label>
-                                
-                                {unreasonableErrors[item.id]?.checked && (
-                                  <div className="mt-3">
-                                    <textarea
-                                      className="w-full text-sm border border-slate-200 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none"
-                                      rows={2}
-                                      placeholder="请填写不合理原因（必填）..."
+                                </td>
+                                <td className="py-3 px-4">
+                                  {unreasonableErrors[item.id]?.checked && (
+                                    <input
+                                      type="text"
+                                      className="w-full text-sm border border-slate-200 rounded p-1.5 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
                                       value={unreasonableErrors[item.id]?.reason || ''}
                                       onChange={(e) => {
                                         setUnreasonableErrors(prev => ({
@@ -3370,255 +3501,178 @@ export default function App() {
                                         }));
                                       }}
                                     />
-                                    {!unreasonableErrors[item.id]?.reason && (
-                                      <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                                        <AlertCircle className="w-3 h-3" />
-                                        必须给出不合理原因
-                                      </p>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        
+                        {/* Summary Footer */}
+                        <div className="p-4 border-t border-slate-200 bg-white text-sm">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-bold text-slate-800">当前分析单位：</span>
+                            <span className="text-red-500">{selectedErrorPair?.file1}</span>
+                            <span className="text-slate-800">和</span>
+                            <span className="text-red-500">{selectedErrorPair?.file2}</span>
                           </div>
-                        ))}
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-800">发现相同错误项：</span>
+                            <span className="text-red-500">1</span>
+                            <span className="text-slate-800">项</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
 
                   {(economicTab === 'quotes' || isExporting) && (
                     <div className="space-y-4">
-                      {isExporting && <h3 className="text-xl font-bold text-slate-800 mt-6 border-b pb-2">报价一致性分析</h3>}
-                      {/* 规律性规则设置 & 筛选条件 */}
-                      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-                        <div className="flex justify-between items-center mb-4">
-                          <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                            <Settings className="w-5 h-5 text-indigo-500"/> 
-                            分析规则与筛选设置
-                          </h3>
-                          <div className="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-                            分析优先级：清单综合单价 &gt; 人材机单价 &gt; 定额子目单价 &gt; 单价构成合价
+                      {isExporting && <h3 className="text-xl font-bold text-slate-800 mt-6 border-b pb-2">清单报价分析</h3>}
+                      
+                      {/* 规则设置 */}
+                      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex justify-between items-start">
+                        <div className="space-y-2">
+                          <div className="flex items-start gap-2">
+                            <span className="font-bold text-slate-800 whitespace-nowrap">当前规则分析：</span>
+                            <span className="text-slate-600">【清单综合单价等比】或【清单下工料机单价等比】或【清单下定额子目单价等比】或【清单下单价构成合价】</span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <span className="font-bold text-slate-800 whitespace-nowrap">起始阈值：</span>
+                            <span className="text-slate-600">【同清单项数量≥5条】或【同清单项数量占总数量的百分比20%】或【同清单项合价之和占总报价的百分比≥20%】</span>
                           </div>
                         </div>
-                        
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                          {/* 规律性规则设置 */}
-                          <div className="space-y-3">
-                            <h4 className="text-sm font-bold text-slate-700 border-b border-slate-100 pb-2">规律性规则设置</h4>
-                            
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="flex flex-col gap-1">
-                                <label className="text-xs text-slate-500">清单综合单价</label>
-                                <select 
-                                  className="text-sm border border-slate-200 rounded-md p-1.5 focus:ring-1 focus:ring-indigo-500 outline-none"
-                                  value={priceRules.comprehensive}
-                                  onChange={(e) => setPriceRules({...priceRules, comprehensive: e.target.value})}
-                                >
-                                  <option>等比</option><option>等价</option><option>等差</option><option>不分析</option>
-                                </select>
-                              </div>
-                              <div className="flex flex-col gap-1">
-                                <label className="text-xs text-slate-500">清单下人材机单价</label>
-                                <select 
-                                  className="text-sm border border-slate-200 rounded-md p-1.5 focus:ring-1 focus:ring-indigo-500 outline-none"
-                                  value={priceRules.resource}
-                                  onChange={(e) => setPriceRules({...priceRules, resource: e.target.value})}
-                                >
-                                  <option>等比</option><option>等价</option><option>等差</option><option>等项</option><option>不分析</option>
-                                </select>
-                              </div>
-                              <div className="flex flex-col gap-1">
-                                <label className="text-xs text-slate-500">清单下定额子目单价</label>
-                                <select 
-                                  className="text-sm border border-slate-200 rounded-md p-1.5 focus:ring-1 focus:ring-indigo-500 outline-none"
-                                  value={priceRules.quota}
-                                  onChange={(e) => setPriceRules({...priceRules, quota: e.target.value})}
-                                >
-                                  <option>等比</option><option>等价</option><option>等差</option><option>等项</option><option>不分析</option>
-                                </select>
-                              </div>
-                              <div className="flex flex-col gap-1">
-                                <label className="text-xs text-slate-500">清单下单价构成合价</label>
-                                <select 
-                                  className="text-sm border border-slate-200 rounded-md p-1.5 focus:ring-1 focus:ring-indigo-500 outline-none"
-                                  value={priceRules.composition}
-                                  onChange={(e) => setPriceRules({...priceRules, composition: e.target.value})}
-                                >
-                                  <option>等比</option><option>等价</option><option>等差</option><option>不分析</option>
-                                </select>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* 筛选条件 */}
-                          <div className="space-y-3">
-                            <h4 className="text-sm font-bold text-slate-700 border-b border-slate-100 pb-2">筛选条件</h4>
-                            
-                            <div className="space-y-4">
-                              <div className="flex items-center gap-3">
-                                <label className="text-sm text-slate-600 w-32">相同清单项数范围</label>
-                                <div className="flex items-center gap-2 flex-1">
-                                  <input 
-                                    type="number" 
-                                    className="w-20 text-sm border border-slate-200 rounded-md p-1.5 text-center focus:ring-1 focus:ring-indigo-500 outline-none"
-                                    value={priceFilters.minItems}
-                                    onChange={(e) => setPriceFilters({...priceFilters, minItems: parseInt(e.target.value) || 0})}
-                                  />
-                                  <span className="text-slate-400">-</span>
-                                  <input 
-                                    type="number" 
-                                    className="w-20 text-sm border border-slate-200 rounded-md p-1.5 text-center focus:ring-1 focus:ring-indigo-500 outline-none"
-                                    value={priceFilters.maxItems}
-                                    onChange={(e) => setPriceFilters({...priceFilters, maxItems: parseInt(e.target.value) || 0})}
-                                  />
-                                  <span className="text-sm text-slate-500">项</span>
-                                </div>
-                              </div>
-                              
-                              <div className="flex items-center gap-3">
-                                <label className="text-sm text-slate-600 w-32">相同清单项数占比</label>
-                                <div className="flex items-center gap-2 flex-1">
-                                  <span className="text-sm text-slate-500">≥ 总项数的</span>
-                                  <input 
-                                    type="number" 
-                                    className="w-20 text-sm border border-slate-200 rounded-md p-1.5 text-center focus:ring-1 focus:ring-indigo-500 outline-none"
-                                    value={priceFilters.percentage}
-                                    onChange={(e) => setPriceFilters({...priceFilters, percentage: parseInt(e.target.value) || 0})}
-                                  />
-                                  <span className="text-sm text-slate-500">%</span>
-                                </div>
-                              </div>
-                              
-                              <div className="flex justify-end pt-2">
-                                <button className="bg-indigo-600 text-white px-4 py-1.5 rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors">
-                                  应用分析
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                        <button className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors whitespace-nowrap">
+                          规则设置
+                        </button>
                       </div>
 
-                      {/* 上方：相似度比值 */}
-                      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-                        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                          <BarChart2 className="w-5 h-5 text-indigo-500"/>
-                          两两文件相同清单报价相似度
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          {mockPriceSimilarity.map((item, idx) => (
-                            <div key={idx} className="bg-slate-50 rounded-lg p-4 border border-slate-100 flex flex-col items-center justify-center text-center">
-                              <div className="text-sm font-medium text-slate-600 mb-2">{item.pair}</div>
-                              <div className="text-3xl font-bold text-indigo-600 mb-1">{item.similarity}</div>
-                              <div className="text-xs text-slate-500">相同项: {item.identicalItems} / 总项: {item.totalItems}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* 中间：清单编码名称和对比文件的单价、差额比例 */}
-                      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-                          <h3 className="font-bold text-slate-800">清单报价明细对比</h3>
-                          <div className="text-xs text-slate-500">点击行查看下方详细构成</div>
-                        </div>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-sm">
-                            <thead className="bg-slate-50 text-slate-600 font-medium border-b border-slate-200">
-                              <tr>
-                                <th className="p-3">清单编码</th>
-                                <th className="p-3">清单名称</th>
-                                <th className="p-3">单位</th>
-                                <th className="p-3 text-right">文件A单价</th>
-                                <th className="p-3 text-right">文件B单价</th>
-                                <th className="p-3 text-right">文件C单价</th>
-                                <th className="p-3">差额比例</th>
-                                <th className="p-3">匹配规则</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {mockPriceItems.map((item) => (
-                                <tr 
-                                  key={item.id} 
-                                  className={`cursor-pointer transition-colors ${selectedPriceItem === item.id ? 'bg-indigo-50' : 'hover:bg-slate-50'}`}
-                                  onClick={() => setSelectedPriceItem(item.id)}
-                                >
-                                  <td className="p-3 font-mono text-slate-600">{item.code}</td>
-                                  <td className="p-3 font-medium text-slate-800">{item.name}</td>
-                                  <td className="p-3 text-slate-500">{item.unit}</td>
-                                  <td className="p-3 text-right font-medium">¥{item.prices['文件A'].toFixed(2)}</td>
-                                  <td className="p-3 text-right font-medium">¥{item.prices['文件B'].toFixed(2)}</td>
-                                  <td className="p-3 text-right font-medium">¥{item.prices['文件C'].toFixed(2)}</td>
-                                  <td className="p-3 text-amber-600 font-medium">{item.diffRatio}</td>
-                                  <td className="p-3 text-indigo-600 text-xs"><span className="bg-indigo-100 px-2 py-1 rounded">{item.ruleMatch}</span></td>
-                                </tr>
+                      {/* 矩阵表格 */}
+                      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+                        <table className="w-full text-center text-sm">
+                          <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
+                            <tr>
+                              <th className="py-3 px-4 font-medium border-r border-slate-200">投标单位名称</th>
+                              {matrixFiles.map(f => (
+                                <th key={f.id} className="py-3 px-4 font-medium text-blue-600">{f.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4')}</th>
                               ))}
-                            </tbody>
-                          </table>
-                        </div>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {matrixFiles.map((rowFile, rowIdx) => (
+                              <tr key={rowFile.id} className="hover:bg-slate-50 transition-colors">
+                                <td className="py-3 px-4 text-blue-600 border-r border-slate-200">{rowFile.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4')}</td>
+                                {matrixFiles.map((colFile, colIdx) => {
+                                  // Mock logic: 100.00% for first two files if they are different
+                                  let value = '-';
+                                  if (rowIdx === 0 && colIdx === 1) value = '100.00%';
+                                  if (rowIdx === 1 && colIdx === 0) value = '100.00%';
+                                  
+                                  const isSelected = selectedQuotePair?.file1 === rowFile.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4') && 
+                                                     selectedQuotePair?.file2 === colFile.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4');
+
+                                  return (
+                                    <td 
+                                      key={colFile.id} 
+                                      className={`py-3 px-4 ${value !== '-' ? 'cursor-pointer text-blue-600 hover:bg-blue-50' : 'text-slate-400'} ${isSelected ? 'bg-blue-100 font-bold' : ''}`}
+                                      onClick={() => {
+                                        if (value !== '-') {
+                                          setSelectedQuotePair({
+                                            file1: rowFile.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4'),
+                                            file2: colFile.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4')
+                                          });
+                                        }
+                                      }}
+                                    >
+                                      {value}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
 
-                      {/* 下方：三个Tab（定额子目、人材机明细、单价构成） */}
-                      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div className="flex border-b border-slate-200 bg-slate-50">
-                          <button
-                            className={`px-6 py-3 font-medium text-sm transition-colors ${
-                              priceDetailTab === 'quota' ? 'bg-white text-indigo-600 border-t-2 border-t-indigo-600 border-r border-r-slate-200' : 'text-slate-500 hover:text-slate-700 border-t-2 border-t-transparent border-r border-r-slate-200'
-                            }`}
-                            onClick={() => setPriceDetailTab('quota')}
-                          >
-                            定额子目
-                          </button>
-                          <button
-                            className={`px-6 py-3 font-medium text-sm transition-colors ${
-                              priceDetailTab === 'resource' ? 'bg-white text-indigo-600 border-t-2 border-t-indigo-600 border-r border-r-slate-200' : 'text-slate-500 hover:text-slate-700 border-t-2 border-t-transparent border-r border-r-slate-200'
-                            }`}
-                            onClick={() => setPriceDetailTab('resource')}
-                          >
-                            人材机明细
-                          </button>
-                          <button
-                            className={`px-6 py-3 font-medium text-sm transition-colors ${
-                              priceDetailTab === 'composition' ? 'bg-white text-indigo-600 border-t-2 border-t-indigo-600 border-r border-r-slate-200' : 'text-slate-500 hover:text-slate-700 border-t-2 border-t-transparent border-r border-r-slate-200'
-                            }`}
-                            onClick={() => setPriceDetailTab('composition')}
-                          >
-                            单价构成
-                          </button>
-                        </div>
-                        
-                        <div className="p-0">
-                          <table className="w-full text-left text-sm">
-                            <thead className="bg-slate-50/50 text-slate-500 font-medium border-b border-slate-100">
-                              <tr>
-                                {priceDetailTab !== 'composition' && <th className="p-3 pl-5">编码</th>}
-                                <th className={`p-3 ${priceDetailTab === 'composition' ? 'pl-5' : ''}`}>名称</th>
-                                {priceDetailTab !== 'composition' && <th className="p-3">单位</th>}
-                                <th className="p-3 text-right">文件A</th>
-                                <th className="p-3 text-right">文件B</th>
-                                <th className="p-3 text-right">文件C</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {mockPriceDetails[selectedPriceItem]?.[priceDetailTab]?.map((item: any, idx: number) => (
-                                <tr key={idx} className="hover:bg-slate-50/50">
-                                  {priceDetailTab !== 'composition' && <td className="p-3 pl-5 font-mono text-slate-500">{item.code}</td>}
-                                  <td className={`p-3 font-medium text-slate-700 ${priceDetailTab === 'composition' ? 'pl-5' : ''}`}>{item.name}</td>
-                                  {priceDetailTab !== 'composition' && <td className="p-3 text-slate-500">{item.unit}</td>}
-                                  <td className="p-3 text-right">¥{item.prices['文件A'].toFixed(2)}</td>
-                                  <td className="p-3 text-right">¥{item.prices['文件B'].toFixed(2)}</td>
-                                  <td className="p-3 text-right">¥{item.prices['文件C'].toFixed(2)}</td>
-                                </tr>
-                              ))}
-                              {(!mockPriceDetails[selectedPriceItem]?.[priceDetailTab] || mockPriceDetails[selectedPriceItem]?.[priceDetailTab]?.length === 0) && (
+                      {/* 详细表格 */}
+                      {selectedQuotePair && (
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                          <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                            <div className="flex items-center gap-4">
+                              <span className="text-sm font-medium text-slate-700">清单快捷搜索:</span>
+                              <select className="text-sm border border-slate-300 rounded-md p-1.5 focus:ring-1 focus:ring-blue-500 outline-none w-40">
+                                <option>全部清单</option>
+                              </select>
+                            </div>
+                            <div className="relative">
+                              <input 
+                                type="text" 
+                                placeholder="请输入搜索内容" 
+                                className="text-sm border border-slate-300 rounded-md py-1.5 pl-3 pr-8 focus:ring-1 focus:ring-blue-500 outline-none w-64"
+                              />
+                              <Search className="w-4 h-4 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2" />
+                            </div>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-center text-sm">
+                              <thead className="bg-slate-50 text-slate-600 font-medium border-b border-slate-200">
                                 <tr>
-                                  <td colSpan={6} className="p-8 text-center text-slate-500">暂无数据</td>
+                                  <th className="p-3 whitespace-nowrap" rowSpan={2}>编码</th>
+                                  <th className="p-3 whitespace-nowrap" rowSpan={2}>名称</th>
+                                  <th className="p-3 whitespace-nowrap" rowSpan={2}>类别</th>
+                                  <th className="p-3 whitespace-nowrap" rowSpan={2}>单位</th>
+                                  <th className="p-3 whitespace-nowrap" rowSpan={2}>项目特征</th>
+                                  <th className="p-3 whitespace-nowrap" rowSpan={2}>{selectedQuotePair.file1}</th>
+                                  <th className="p-3 whitespace-nowrap" rowSpan={2}>{selectedQuotePair.file2}</th>
+                                  <th className="p-3 whitespace-nowrap" rowSpan={2}>比率 (%)</th>
+                                  <th className="p-3 whitespace-nowrap" rowSpan={2}>所属单项单位工程</th>
+                                  <th className="p-3 whitespace-nowrap border-b border-slate-200" colSpan={2}>规律性标记</th>
                                 </tr>
-                              )}
-                            </tbody>
-                          </table>
+                                <tr>
+                                  <th className="p-2 whitespace-nowrap border-t border-slate-200">清单</th>
+                                  <th className="p-2 whitespace-nowrap border-t border-slate-200">定额子目</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                <tr className="bg-slate-100/50">
+                                  <td colSpan={11} className="p-2 text-left font-bold text-slate-700 flex items-center gap-1">
+                                    <ChevronDown className="w-4 h-4" />
+                                    单价比率 = 1% (共 1203 项)
+                                  </td>
+                                </tr>
+                                {mockQuoteDetails.map((item) => (
+                                  <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                                    <td className="p-3 text-slate-600">{item.code}</td>
+                                    <td className="p-3 text-slate-800">{item.name}</td>
+                                    <td className="p-3 text-slate-500">{item.category}</td>
+                                    <td className="p-3 text-slate-500">{item.unit}</td>
+                                    <td className="p-3 text-slate-600 text-left max-w-xs truncate" title={item.features}>{item.features}</td>
+                                    <td className="p-3 text-slate-800">{item.price1}</td>
+                                    <td className="p-3 text-slate-800">{item.price2}</td>
+                                    <td className="p-3 text-slate-800">{item.ratio}</td>
+                                    <td className="p-3 text-slate-600">{item.project}</td>
+                                    <td className="p-3 text-blue-600"><div className="flex justify-center">{item.regularityList && <CheckCircle className="w-4 h-4" />}</div></td>
+                                    <td className="p-3 text-blue-600"><div className="flex justify-center">{item.regularityQuota && <CheckCircle className="w-4 h-4" />}</div></td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          <div className="p-4 bg-slate-50 border-t border-slate-200 text-sm">
+                            <div className="mb-1">
+                              <span className="font-bold text-slate-800">当前分析单位：</span>
+                              <span className="text-red-500">{selectedQuotePair.file1}</span>
+                              <span>和</span>
+                              <span className="text-red-500">{selectedQuotePair.file2}</span>
+                            </div>
+                            <div>
+                              <span className="font-bold text-slate-800">发现相同错误项：</span>
+                              <span className="text-red-500 font-bold">782</span>
+                              <span> 项相同，{selectedQuotePair.file1}相同项合价之和为3711369.85元，占自身总报价99.64%，{selectedQuotePair.file2}相同项合价之和为3724730.51元，占自身总报价100.00%</span>
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   )}
 
@@ -3703,155 +3757,242 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* 定额子目分析结果表格 */}
-                      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                          <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                            <Table className="w-5 h-5 text-indigo-500"/> 
-                            定额子目分析结果
-                          </h3>
-                        </div>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left border-collapse text-sm">
-                            <thead>
-                              <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                                <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap">项目名称</th>
-                                <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap">单项工程</th>
-                                <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap">上级清单</th>
-                                <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap">定额编号</th>
-                                <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap">定额名称</th>
-                                <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap">单位</th>
-                                {comparingFiles.map(f => (
-                                  <th key={f.id} className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap">{f.name}单价(元)</th>
-                                ))}
-                                <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap">单价关系</th>
-                                <th className="py-3 px-4 font-bold whitespace-nowrap">差比/比率</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-200">
-                              {mockQuotaAnalysisData.map((row) => (
-                                <tr key={row.id} className="hover:bg-slate-50 transition-colors">
-                                  <td className="py-3 px-4 text-slate-700 border-r border-slate-200 whitespace-nowrap">{row.projectName}</td>
-                                  <td className="py-3 px-4 text-slate-700 border-r border-slate-200 whitespace-nowrap">{row.singleItem}</td>
-                                  <td className="py-3 px-4 text-slate-700 border-r border-slate-200 text-xs whitespace-nowrap">{row.parentList}</td>
-                                  <td className="py-3 px-4 font-mono text-indigo-600 border-r border-slate-200 whitespace-nowrap">{row.quotaCode}</td>
-                                  <td className="py-3 px-4 text-slate-800 font-medium border-r border-slate-200 whitespace-nowrap">{row.quotaName}</td>
-                                  <td className="py-3 px-4 text-slate-500 border-r border-slate-200 whitespace-nowrap">{row.unit}</td>
-                                  {comparingFiles.map(f => (
-                                    <td key={f.id} className="py-3 px-4 font-mono text-slate-700 border-r border-slate-200 text-right whitespace-nowrap">
-                                      {row.prices[f.name as keyof typeof row.prices]?.toFixed(2)}
-                                    </td>
-                                  ))}
-                                  <td className="py-3 px-4 border-r border-slate-200 whitespace-nowrap">
-                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                                      row.relationship === '相同' ? 'bg-emerald-100 text-emerald-700' :
-                                      row.relationship.includes('系数') ? 'bg-blue-100 text-blue-700' :
-                                      'bg-amber-100 text-amber-700'
-                                    }`}>
-                                      {row.relationship}
-                                    </span>
-                                  </td>
-                                  <td className="py-3 px-4 font-mono text-slate-600 text-xs whitespace-nowrap">{row.ratio}</td>
-                                </tr>
+                      {/* 矩阵表格 */}
+                      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+                        <table className="w-full text-center text-sm">
+                          <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
+                            <tr>
+                              <th className="py-3 px-4 font-medium border-r border-slate-200">投标单位名称</th>
+                              {matrixFiles.map(f => (
+                                <th key={f.id} className="py-3 px-4 font-medium text-blue-600">{f.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4')}</th>
                               ))}
-                            </tbody>
-                          </table>
-                        </div>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {matrixFiles.map((rowFile, rowIdx) => (
+                              <tr key={rowFile.id} className="hover:bg-slate-50 transition-colors">
+                                <td className="py-3 px-4 text-blue-600 border-r border-slate-200">{rowFile.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4')}</td>
+                                {matrixFiles.map((colFile, colIdx) => {
+                                  // Mock logic: 100.00% for first two files if they are different
+                                  let value = '-';
+                                  if (rowIdx === 0 && colIdx === 1) value = '100.00%';
+                                  if (rowIdx === 1 && colIdx === 0) value = '100.00%';
+                                  
+                                  const isSelected = selectedQuotaPair?.file1 === rowFile.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4') && 
+                                                     selectedQuotaPair?.file2 === colFile.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4');
+
+                                  return (
+                                    <td 
+                                      key={colFile.id} 
+                                      className={`py-3 px-4 ${value !== '-' ? 'cursor-pointer text-blue-600 hover:bg-blue-50' : 'text-slate-400'} ${isSelected ? 'bg-blue-100 font-bold' : ''}`}
+                                      onClick={() => {
+                                        if (value !== '-') {
+                                          setSelectedQuotaPair({
+                                            file1: rowFile.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4'),
+                                            file2: colFile.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4')
+                                          });
+                                        }
+                                      }}
+                                    >
+                                      {value}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
+
+                      {/* 定额子目分析结果表格 */}
+                      {selectedQuotaPair && (
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                          <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                            <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                              <Table className="w-5 h-5 text-indigo-500"/> 
+                              定额子目分析结果
+                            </h3>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse text-sm">
+                              <thead>
+                                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                                  <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap">编码</th>
+                                  <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap">名称</th>
+                                  <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap">单位</th>
+                                  <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap">项目特征</th>
+                                  <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap text-right">{selectedQuotaPair.file1}</th>
+                                  <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap text-right">{selectedQuotaPair.file2}</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-200">
+                                <tr className="bg-slate-100/50">
+                                  <td colSpan={6} className="p-2 text-left font-bold text-slate-700 flex items-center gap-1">
+                                    <ChevronDown className="w-4 h-4" />
+                                    单价比率 = 1% (共 1203 项)
+                                  </td>
+                                </tr>
+                                {mockQuotaDetails.map((row) => (
+                                  <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+                                    <td className="py-3 px-4 font-mono text-indigo-600 border-r border-slate-200 whitespace-nowrap" style={{ paddingLeft: `${row.level * 1.5 + 1}rem` }}>
+                                      <div className="flex items-center gap-2">
+                                        {row.hasChildren && <ChevronDown className="w-4 h-4 text-slate-400" />}
+                                        {!row.hasChildren && <span className="w-4 inline-block"></span>}
+                                        {row.code}
+                                      </div>
+                                    </td>
+                                    <td className="py-3 px-4 text-slate-800 font-medium border-r border-slate-200 whitespace-nowrap">{row.name}</td>
+                                    <td className="py-3 px-4 text-slate-500 border-r border-slate-200 whitespace-nowrap">{row.unit}</td>
+                                    <td className="py-3 px-4 text-slate-600 border-r border-slate-200 text-left max-w-xs truncate" title={row.features}>{row.features}</td>
+                                    <td className="py-3 px-4 font-mono text-slate-700 border-r border-slate-200 text-right whitespace-nowrap">
+                                      {row.price1}
+                                    </td>
+                                    <td className="py-3 px-4 font-mono text-slate-700 border-r border-slate-200 text-right whitespace-nowrap">
+                                      {row.price2}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          <div className="p-4 bg-slate-50 border-t border-slate-200 text-sm">
+                            <div className="mb-1">
+                              <span className="font-bold text-slate-800">当前分析单位：</span>
+                              <span className="text-red-500">{selectedQuotaPair.file1}</span>
+                              <span>和</span>
+                              <span className="text-red-500">{selectedQuotaPair.file2}</span>
+                            </div>
+                            <div>
+                              <span className="font-bold text-slate-800">发现相同定额项：</span>
+                              <span className="text-red-500 font-bold">1203</span>
+                              <span> 项相同，{selectedQuotaPair.file1}相同项合价之和为152341.20元，占自身总报价85.50%，{selectedQuotaPair.file2}相同项合价之和为152341.20元，占自身总报价85.50%</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
                   {(economicTab === 'materials' || isExporting) && (
                     <div className="space-y-4">
                       {isExporting && <h3 className="text-xl font-bold text-slate-800 mt-6 border-b pb-2">项目人材机汇总分析</h3>}
-                      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex justify-between items-center">
-                        <div>
-                          <h3 className="font-bold text-slate-800 flex items-center gap-2"><Briefcase className="w-5 h-5 text-indigo-500"/> 项目人材机汇总分析</h3>
-                          <p className="text-sm text-slate-500 mt-1">比对两份文件中的人材机单价，不包含甲供和暂估材料。</p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-2">
-                            <input 
-                              type="checkbox" 
-                              id="filter-materials" 
-                              className="rounded text-indigo-600 focus:ring-indigo-500"
-                              defaultChecked
-                            />
-                            <label htmlFor="filter-materials" className="text-sm text-slate-600">仅显示单价相同项</label>
-                          </div>
-                        </div>
-                      </div>
                       
-                      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-                          <div className="font-medium text-slate-700">相同人材机单价明细</div>
-                          <div className="text-sm text-slate-500">
-                            已标记 <span className="text-red-600 font-bold">{selectedUnreasonableMaterials.length}</span> 项不合理相同项
+                      {/* 规则设置 */}
+                      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex justify-between items-center">
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className="flex items-center gap-2 border-r border-slate-200 pr-4">
+                            <span className="font-bold text-slate-800 whitespace-nowrap">当前规则分析：</span>
+                            <span className="text-red-600 font-medium">单价差额相同(A-B)</span>
+                          </div>
+                          <div className="flex items-center gap-2 pl-2">
+                            <span className="font-bold text-slate-800 whitespace-nowrap">筛选条件：</span>
+                            <span className="text-red-600">同差额项数量≥1条 或 同差额项数量占总数量的百分比≥20% 或 同差额项合价之和占总报价的百分比≥20%</span>
                           </div>
                         </div>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left border-collapse text-sm">
-                            <thead>
-                              <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                                <th className="py-3 px-4 font-bold border-r border-slate-200 w-12 text-center">
-                                  <input 
-                                    type="checkbox" 
-                                    className="rounded text-indigo-600 focus:ring-indigo-500"
-                                    checked={selectedUnreasonableMaterials.length === mockMaterialsData.length}
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setSelectedUnreasonableMaterials(mockMaterialsData.map(m => m.id));
-                                      } else {
-                                        setSelectedUnreasonableMaterials([]);
-                                      }
-                                    }}
-                                  />
-                                </th>
-                                <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap">编码</th>
-                                <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap">类别</th>
-                                <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap">名称</th>
-                                <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap">规格型号</th>
-                                <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap">单位</th>
-                                <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap text-right">文件A单价(元)</th>
-                                <th className="py-3 px-4 font-bold whitespace-nowrap text-right">文件B单价(元)</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {mockMaterialsData.map((item, index) => (
-                                <tr key={item.id} className={`border-b border-slate-100 hover:bg-slate-50 ${selectedUnreasonableMaterials.includes(item.id) ? 'bg-red-50/30' : ''}`}>
-                                  <td className="py-3 px-4 border-r border-slate-100 text-center">
-                                    <input 
-                                      type="checkbox" 
-                                      className="rounded text-red-600 focus:ring-red-500"
-                                      checked={selectedUnreasonableMaterials.includes(item.id)}
-                                      onChange={() => handleMaterialCheck(item.id)}
-                                    />
-                                  </td>
-                                  <td className="py-3 px-4 border-r border-slate-100 font-mono text-xs text-slate-500">{item.code}</td>
-                                  <td className="py-3 px-4 border-r border-slate-100">
-                                    <span className={`px-2 py-0.5 rounded text-xs ${
-                                      item.category === '人工' ? 'bg-blue-100 text-blue-700' :
-                                      item.category === '材料' ? 'bg-emerald-100 text-emerald-700' :
-                                      'bg-amber-100 text-amber-700'
-                                    }`}>
-                                      {item.category}
-                                    </span>
-                                  </td>
-                                  <td className="py-3 px-4 border-r border-slate-100 font-medium text-slate-800">{item.name}</td>
-                                  <td className="py-3 px-4 border-r border-slate-100 text-slate-600">{item.spec}</td>
-                                  <td className="py-3 px-4 border-r border-slate-100 text-slate-500">{item.unit}</td>
-                                  <td className="py-3 px-4 border-r border-slate-100 text-right font-mono text-slate-700">{item.priceA.toFixed(2)}</td>
-                                  <td className="py-3 px-4 text-right font-mono text-slate-700">{item.priceB.toFixed(2)}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        <div className="p-4 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex items-center gap-2">
-                          <Info className="w-4 h-4 text-slate-400" />
-                          <span>注：以上分析已自动排除“甲供材料”和“暂估材料”。勾选的项将被标记为“不合理相同项”并计入风险报告。</span>
-                        </div>
+                        <button className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors whitespace-nowrap">
+                          规则设置
+                        </button>
                       </div>
+
+                      {/* 矩阵表格 */}
+                      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+                        <table className="w-full text-center text-sm">
+                          <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
+                            <tr>
+                              <th className="py-3 px-4 font-medium border-r border-slate-200">投标单位名称</th>
+                              {matrixFiles.map(f => (
+                                <th key={f.id} className="py-3 px-4 font-medium text-blue-600">{f.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4')}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {matrixFiles.map((rowFile, rowIdx) => (
+                              <tr key={rowFile.id} className="hover:bg-slate-50 transition-colors">
+                                <td className="py-3 px-4 text-blue-600 border-r border-slate-200">{rowFile.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4')}</td>
+                                {matrixFiles.map((colFile, colIdx) => {
+                                  // Mock logic: 99.00% for first two files if they are different
+                                  let value = '-';
+                                  if (rowIdx === 0 && colIdx === 1) value = '99.00%';
+                                  if (rowIdx === 1 && colIdx === 0) value = '99.00%';
+                                  
+                                  const isSelected = selectedMaterialPair?.file1 === rowFile.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4') && 
+                                                     selectedMaterialPair?.file2 === colFile.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4');
+
+                                  return (
+                                    <td 
+                                      key={colFile.id} 
+                                      className={`py-3 px-4 ${value !== '-' ? 'cursor-pointer text-blue-600 hover:bg-blue-50' : 'text-slate-400'} ${isSelected ? 'bg-blue-100 font-bold' : ''}`}
+                                      onClick={() => {
+                                        if (value !== '-') {
+                                          setSelectedMaterialPair({
+                                            file1: rowFile.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4'),
+                                            file2: colFile.name.replace('.gef', '.SXTB4').replace('.nXZTF', '.SXTB4')
+                                          });
+                                        }
+                                      }}
+                                    >
+                                      {value}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* 详细表格 */}
+                      {selectedMaterialPair && (
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse text-sm">
+                              <thead>
+                                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                                  <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap text-center">编码</th>
+                                  <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap text-center">类别</th>
+                                  <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap text-center">名称</th>
+                                  <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap text-center">规格型号</th>
+                                  <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap text-center">单位</th>
+                                  <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap text-center">{selectedMaterialPair.file1}</th>
+                                  <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap text-center">{selectedMaterialPair.file2}</th>
+                                  <th className="py-3 px-4 font-bold border-r border-slate-200 whitespace-nowrap text-center">不合理项 <input type="checkbox" className="ml-1 rounded text-indigo-600 focus:ring-indigo-500" /></th>
+                                  <th className="py-3 px-4 font-bold whitespace-nowrap text-center">不合理原因</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {mockMaterialsData.map((item) => (
+                                  <tr key={item.id} className="hover:bg-slate-50 transition-colors text-center">
+                                    <td className="py-3 px-4 border-r border-slate-100 font-mono text-slate-600">{item.code}</td>
+                                    <td className="py-3 px-4 border-r border-slate-100 text-slate-600">{item.category}</td>
+                                    <td className="py-3 px-4 border-r border-slate-100 text-slate-800">{item.name}</td>
+                                    <td className="py-3 px-4 border-r border-slate-100 text-slate-600">{item.spec}</td>
+                                    <td className="py-3 px-4 border-r border-slate-100 text-slate-600">{item.unit}</td>
+                                    <td className="py-3 px-4 border-r border-slate-100 font-mono text-slate-700">{item.priceA}</td>
+                                    <td className="py-3 px-4 border-r border-slate-100 font-mono text-slate-700">{item.priceB}</td>
+                                    <td className="py-3 px-4 border-r border-slate-100">
+                                      <input type="checkbox" className="rounded text-indigo-600 focus:ring-indigo-500" />
+                                    </td>
+                                    <td className="py-3 px-4 text-slate-600"></td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          <div className="p-4 bg-slate-50 border-t border-slate-200 text-sm">
+                            <div className="mb-1">
+                              <span className="font-bold text-slate-800">当前分析单位：</span>
+                              <span className="text-red-500">{selectedMaterialPair.file1}</span>
+                              <span>和</span>
+                              <span className="text-red-500">{selectedMaterialPair.file2}</span>
+                            </div>
+                            <div>
+                              <span className="font-bold text-slate-800">发现相同错项：</span>
+                              <span className="text-red-500 font-bold">1026</span>
+                              <span> 项相同，{selectedMaterialPair.file1}相同项合价之和为1259548.456961元，占自身总报价100.00%，{selectedMaterialPair.file2}相同项合价之和为1259548.456961元，占自身总报价99.58%</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 

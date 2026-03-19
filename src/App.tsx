@@ -51,153 +51,14 @@ import {
 
 // Configuration Constants
 const ALL_CHECK_TYPES = ['资信标比对', '技术标比对', '经济标比对', '文件设备特征比对'];
-const ALL_CREDIT_ITEMS = ['投标成员姓名', '投标成员身份证', '建筑业企业资质证书证书编号', '安全生产许可证证书编号', '建筑师注册证书注册编号', '安全生产考核合格证书编号', '专业建筑资格证书管理号', '职业培训合格证证书编号', '业绩工程名称雷同', '项目经理身份证号雷同'];
-
-const CREDIT_TREE_STRUCTURE = [
-  {
-    id: 'bidding-members',
-    label: '投标成员雷同性分析',
-    children: [
-      { id: 'pm', label: '项目负责人', children: [{ id: 'pm-name', label: '姓名' }, { id: 'pm-id', label: '身份证号' }] },
-      { id: 'tm', label: '技术负责人', children: [{ id: 'tm-name', label: '姓名' }, { id: 'tm-id', label: '身份证号' }] },
-      { id: 'cw', label: '施工员', children: [{ id: 'cw-name', label: '姓名' }, { id: 'cw-id', label: '身份证号' }] },
-      { id: 'so', label: '安全员', children: [{ id: 'so-name', label: '姓名' }, { id: 'so-id', label: '身份证号' }] },
-      { id: 'qo', label: '质量员', children: [{ id: 'qo-name', label: '姓名' }, { id: 'qo-id', label: '身份证号' }] },
-      { id: 'mo', label: '材料员', children: [{ id: 'mo-name', label: '姓名' }, { id: 'mo-id', label: '身份证号' }] },
-      { id: 'meo', label: '机械员', children: [{ id: 'meo-name', label: '姓名' }, { id: 'meo-id', label: '身份证号' }] },
-      { id: 'do', label: '资料员', children: [{ id: 'do-name', label: '姓名' }, { id: 'do-id', label: '身份证号' }] },
-      { id: 'lo', label: '劳务员', children: [{ id: 'lo-name', label: '姓名' }, { id: 'lo-id', label: '身份证号' }] },
-    ]
-  },
-  {
-    id: 'certificates',
-    label: '资质证书雷同性分析',
-    children: [
-      {
-        id: 'enterprise-certs',
-        label: '企业证书',
-        children: [
-          {
-            id: 'safety-license',
-            label: '安全生产许可证',
-            children: [
-              { id: 'sl-type', label: '证书类型' },
-              { id: 'sl-ent-name', label: '企业名称' },
-              { id: 'sl-addr', label: '单位地址' },
-              { id: 'sl-code', label: '统一社会信用代码' },
-              { id: 'sl-legal', label: '法定代表人' },
-              { id: 'sl-num', label: '编号' },
-              { id: 'sl-validity', label: '有效期' },
-              { id: 'sl-org', label: '发证机关' },
-              { id: 'sl-date', label: '发证日期' },
-            ]
-          },
-          {
-            id: 'construction-cert',
-            label: '建筑业企业资质证书',
-            children: [
-              { id: 'cc-type', label: '证书类型' },
-              { id: 'cc-ent-name', label: '企业名称' },
-              { id: 'cc-addr', label: '企业地址' },
-              { id: 'cc-code', label: '统一社会信用代码' },
-              { id: 'cc-legal', label: '法定代表人' },
-              { id: 'cc-capital', label: '注册资本' },
-              { id: 'cc-nature', label: '企业性质' },
-              { id: 'cc-num', label: '证书编号' },
-              { id: 'cc-validity', label: '证书有效期' },
-              { id: 'cc-grade', label: '资质类别及等级' },
-              { id: 'cc-org', label: '发证机关' },
-              { id: 'cc-date', label: '发证日期' },
-            ]
-          }
-        ]
-      },
-      {
-        id: 'personnel-certs',
-        label: '人员证书',
-        children: [
-          {
-            id: 'architect-cert',
-            label: '建筑师注册证书',
-            children: [
-              { id: 'ac-type', label: '证书类型' },
-              { id: 'ac-grade', label: '资质等级' },
-              { id: 'ac-name', label: '姓名' },
-              { id: 'ac-gender', label: '性别' },
-              { id: 'ac-dob', label: '出生日期' },
-              { id: 'ac-num', label: '注册编号' },
-              { id: 'ac-employer', label: '聘用企业' },
-              { id: 'ac-major', label: '注册专业' },
-            ]
-          },
-          {
-            id: 'safety-assess-cert',
-            label: '安全生产考核合格证书',
-            children: [
-              { id: 'sac-type', label: '证书类型' },
-              { id: 'sac-name', label: '姓名' },
-              { id: 'sac-gender', label: '性别' },
-              { id: 'sac-dob', label: '出生日期' },
-              { id: 'sac-num', label: '编号' },
-              { id: 'sac-ent-name', label: '企业名称' },
-              { id: 'sac-pos', label: '职务' },
-            ]
-          },
-          {
-            id: 'tech-qual-cert',
-            label: '专业技术资格证书',
-            children: [
-              { id: 'tqc-unit', label: '工作单位' },
-              { id: 'tqc-mgt-num', label: '管理号' },
-              { id: 'tqc-name', label: '姓名' },
-              { id: 'tqc-id', label: '身份证号' },
-              { id: 'tqc-qual-name', label: '资格名称' },
-              { id: 'tqc-prof-name', label: '专业名称' },
-              { id: 'tqc-appr-date', label: '批准日期' },
-              { id: 'tqc-file', label: '批复文件' },
-            ]
-          },
-          {
-            id: 'voc-train-cert',
-            label: '职业培训合格证',
-            children: [
-              { id: 'vtc-type', label: '证书类型' },
-              { id: 'vtc-name', label: '姓名' },
-              { id: 'vtc-id', label: '身份证号' },
-              { id: 'vtc-post', label: '岗位名称' },
-              { id: 'vtc-num', label: '证书编号' },
-              { id: 'vtc-org', label: '培训机构' },
-              { id: 'vtc-date', label: '发证日期' },
-            ]
-          }
-        ]
-      }
-    ]
-  },
-  {
-    id: 'performance',
-    label: '业绩雷同性分析',
-    children: [
-      { id: 'perf-name', label: '工程名称' },
-      { id: 'perf-unit', label: '建设单位' },
-    ]
-  },
-  {
-    id: 'project-manager',
-    label: '项目经理雷同性分析',
-    children: [
-      { id: 'pm-mgr-name', label: '姓名' },
-      { id: 'pm-mgr-id', label: '身份证号' },
-    ]
-  }
-];
+const ALL_CREDIT_ITEMS = ['法定代表人名称比对', '法定代表人身份证比对', '人员名称比对', '人员身份证比对', '手机号比对', '邮箱比对', '证书编号比对', '业绩名称比对', '地址比对', '统一社会信用代码比对'];
 const ALL_TECH_ITEMS = ['全文语句雷同比对',  'Word属性查重', '图片查重', '图片文字OCR查重', '表格文字查重', '敏感信息查重', '签章查重', '引用内容查重'];
 const ALL_ECONOMIC_ITEMS = ['清单错误一致性比对', '清单内容查重', '项目总价规律性比对', '分部分项报价规律比对', '措施项目规律比对', '其他项目规律比对', '计价锁号比对'];
 const ALL_DEVICE_ITEMS = ['计算机名比对', '计算机用户名比对', '文件操作来源比对', '文件创建码比对', 'MAC地址比对', 'CPU序列号比对', '文件生成锁号比对', '硬盘序列号比对', '主板序列号比对', '机器特征码比对'];
 
 // Mock Data
 const INSPECTION_POINTS = [
-  { id: 1, title: '资信标比对', desc: '深度比对投标成员姓名、身份证、各类证书编号及业绩工程名称等关键资信信息。', icon: <Clock className="w-6 h-6 text-blue-500" /> },
+  { id: 1, title: '资信标比对', desc: '深度比对法定代表人、人员名称、身份证、手机号、邮箱、证书编号、业绩名称、地址及统一社会信用代码等关键资信信息。', icon: <Clock className="w-6 h-6 text-blue-500" /> },
   { id: 2, title: '技术标比对', desc: '基于自然语言处理，比对全文语句、表格文字、图片内容及敏感信息，支持过滤招标文件。', icon: <FileSearch className="w-6 h-6 text-emerald-500" /> },
   { id: 3, title: '经济标比对', desc: '精准提取并比对工程量清单、报价明细等核心经济数据。', icon: <Fingerprint className="w-6 h-6 text-amber-500" /> },
   { id: 4, title: '文件设备特征比对', desc: '识别生成文档的计算机MAC地址、硬盘序列号及Word属性等底层硬件特征。', icon: <Cpu className="w-6 h-6 text-purple-500" /> },
@@ -240,7 +101,7 @@ const DEFAULT_TEMPLATES = [
     desc: '仅检查资信标和设备特征，适用于初步筛选阶段。',
     config: {
       types: ['资信标比对', '文件设备特征比对'],
-      credit: ['投标成员姓名', '投标成员身份证', '建筑业企业资质证书证书编号', '安全生产许可证证书编号'],
+      credit: ['法定代表人名称比对', '法定代表人身份证比对', '人员名称比对', '人员身份证比对', '地址比对', '统一社会信用代码比对'],
       tech: [],
       economic: [],
       device: ['MAC地址比对', '计算机名比对'],
@@ -375,7 +236,6 @@ export default function App() {
   const [techFileB, setTechFileB] = useState<string>('');
   const [activeDuplicateId, setActiveDuplicateId] = useState<number | null>(null);
   const [activeTechItem, setActiveTechItem] = useState<any>(null);
-  const [expandedCreditNodes, setExpandedCreditNodes] = useState<Set<string>>(new Set());
   const [unreasonableErrors, setUnreasonableErrors] = useState<Record<string, { checked: boolean, reason: string }>>({});
   const pdfARef = useRef<HTMLDivElement>(null);
   const pdfBRef = useRef<HTMLDivElement>(null);
@@ -617,7 +477,7 @@ export default function App() {
     { id: 'm7', name: '中建七局-非加密投标文件.SXTB4' },
     { id: 'm8', name: '中建八局-非加密投标文件.SXTB4' },
   ];
-  const creditItems = selectedCreditItems.length > 0 ? selectedCreditItems : ['投标成员姓名', '投标成员身份证', '建筑业企业资质证书证书编号', '安全生产许可证证书编号'];
+  const creditItems = selectedCreditItems.length > 0 ? selectedCreditItems : ['法定代表人名称比对', '法定代表人身份证比对', '人员名称比对', '人员身份证比对', '地址比对', '统一社会信用代码比对'];
 
   const availableCheckTypes = files.length > 0 
     ? getSupportedCheckTypes(files[0].name)
@@ -689,21 +549,21 @@ export default function App() {
       field: item,
       files: comparingFiles.map((f, i) => {
         let values: string[] = [];
-        if (item === '投标成员姓名') values = i === 0 || i === 2 ? ['张建国', '王强'] : ['李伟', '赵敏'];
-        else if (item === '投标成员身份证') values = i === 0 || i === 2 ? ['110105198001011234', '110105198502023456'] : ['110105199001015678', '110105199203037890'];
-        else if (item === '建筑业企业资质证书证书编号') values = i % 2 === 0 ? ['D211012345'] : ['D211098765'];
-        else if (item === '安全生产许可证证书编号') values = i === 1 || i === 3 ? ['京JZ安许证字[2026]001234'] : ['京JZ安许证字[2026]005678'];
-        else if (item === '建筑师注册证书注册编号') values = i % 2 === 0 ? ['京111202612345', '京111202654321'] : ['京111202698765'];
-        else if (item === '安全生产考核合格证书编号') values = i === 0 || i === 2 ? ['京建安B(2026)0012345'] : ['京建安B(2026)0098765'];
-        else if (item === '专业建筑资格证书管理号') values = i % 2 === 0 ? ['00123456'] : ['00987654'];
-        else if (item === '职业培训合格证证书编号') values = i === 1 || i === 3 ? ['PX2026001234', 'PX2026001235'] : ['PX2026005678'];
-        else if (item === '项目经理身份证号雷同') values = i === 0 || i === 2 ? ['110105198001011234'] : ['110105199001015678'];
-        else if (item === '业绩工程名称雷同') values = i % 2 === 0 ? ['某市第一人民医院门诊楼新建工程', '某市第二人民医院住院楼'] : ['某住宅楼项目'];
+        if (item === '法定代表人名称比对') values = i % 2 === 0 ? ['陈大明'] : ['王小二'];
+        else if (item === '法定代表人身份证比对') values = i % 2 === 0 ? ['110105197001011234'] : ['110105197502023456'];
+        else if (item === '人员名称比对') values = i === 0 || i === 2 ? ['张建国', '王强'] : ['李伟', '赵敏'];
+        else if (item === '人员身份证比对') values = i === 0 || i === 2 ? ['110105198001011234', '110105198502023456'] : ['110105199001015678', '110105199203037890'];
+        else if (item === '手机号比对') values = i % 2 === 0 ? ['13800138000'] : ['13900139000'];
+        else if (item === '邮箱比对') values = i % 2 === 0 ? ['admin@company.com'] : ['contact@other.com'];
+        else if (item === '证书编号比对') values = i % 2 === 0 ? ['D211012345'] : ['D211098765'];
+        else if (item === '业绩名称比对') values = i % 2 === 0 ? ['某市第一人民医院门诊楼新建工程', '某市第二人民医院住院楼'] : ['某住宅楼项目'];
+        else if (item === '地址比对') values = i % 2 === 0 ? ['北京市海淀区某某路1号'] : ['上海市浦东新区某某路99号'];
+        else if (item === '统一社会信用代码比对') values = i % 2 === 0 ? ['91110108MA00123456'] : ['91310115MA00987654'];
         else values = [`合规数据 ${i}-${j}-A`, `合规数据 ${i}-${j}-B`];
         
         // Add some cross-file duplicates to test highlighting
-        if (item === '投标成员姓名' && i === 1) values.push('张建国'); // Duplicate with file 0 and 2
-        if (item === '投标成员身份证' && i === 3) values.push('110105198001011234'); // Duplicate with file 0 and 2
+        if (item === '人员名称比对' && i === 1) values.push('张建国'); // Duplicate with file 0 and 2
+        if (item === '人员身份证比对' && i === 3) values.push('110105198001011234'); // Duplicate with file 0 and 2
         
         return {
           fileId: f.id,
@@ -713,220 +573,6 @@ export default function App() {
       })
     };
   });
-
-  const toggleCreditNode = (id: string) => {
-    setExpandedCreditNodes(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const getMockValueForLeaf = (leafId: string, fileIdx: number) => {
-    const isEven = fileIdx % 2 === 0;
-    const isFirstOrThird = fileIdx === 0 || fileIdx === 2;
-    
-    if (leafId.includes('name')) {
-      if (leafId.includes('pm-name')) return isFirstOrThird ? ['张建国'] : ['李伟'];
-      if (leafId.includes('tm-name')) return isFirstOrThird ? ['王强'] : ['赵敏'];
-      return isFirstOrThird ? ['陈刚'] : ['刘芳'];
-    }
-    if (leafId.includes('id') || leafId.includes('num') || leafId.includes('code') || leafId.includes('mgt-num')) {
-      if (leafId.includes('pm-id')) return isFirstOrThird ? ['110105198001011234'] : ['110105199001015678'];
-      if (leafId.includes('tm-id')) return isFirstOrThird ? ['110105198502023456'] : ['110105199203037890'];
-      return isFirstOrThird ? [`ID-${leafId}-001`] : [`ID-${leafId}-002`];
-    }
-    if (leafId.includes('ent-name') || leafId.includes('employer') || leafId.includes('unit')) {
-      return isEven ? ['中建某局有限公司'] : ['中铁某局集团'];
-    }
-    if (leafId.includes('date') || leafId.includes('validity')) {
-      return ['2026-12-31'];
-    }
-    if (leafId.includes('type')) return ['一级资质'];
-    if (leafId.includes('org')) return ['北京市住房和城乡建设委员会'];
-    
-    return [`数据-${leafId}-${fileIdx}`];
-  };
-
-  const populateCreditTree = (nodes: any[]): any[] => {
-    return nodes.map(node => {
-      if (node.children) {
-        return { ...node, children: populateCreditTree(node.children) };
-      }
-      return {
-        ...node,
-        fileData: matrixFiles.map((f, i) => ({
-          fileId: f.id,
-          fileName: f.name,
-          values: getMockValueForLeaf(node.id, i)
-        }))
-      };
-    });
-  };
-
-  const creditTreeData = populateCreditTree(CREDIT_TREE_STRUCTURE);
-
-  // Automatically expand nodes with duplicates
-  useEffect(() => {
-    const nodesToExpand = new Set<string>();
-    
-    const checkNodeForDuplicates = (node: any): boolean => {
-      let hasDup = false;
-      if (node.children) {
-        node.children.forEach((child: any) => {
-          if (checkNodeForDuplicates(child)) {
-            hasDup = true;
-          }
-        });
-      } else if (node.fileData) {
-        const allValues = node.fileData.flatMap((fd: any) => fd.values);
-        hasDup = allValues.some((v: string) => allValues.filter(av => av === v).length > 1);
-      }
-      
-      if (hasDup) {
-        nodesToExpand.add(node.id);
-      }
-      return hasDup;
-    };
-
-    creditTreeData.forEach(node => checkNodeForDuplicates(node));
-    setExpandedCreditNodes(nodesToExpand);
-  }, []);
-
-  const CreditTreeRow = ({ 
-    item, 
-    level, 
-    expandedNodes, 
-    toggleNode, 
-    comparingFiles, 
-    onValueClick 
-  }: { 
-    item: any, 
-    level: number, 
-    expandedNodes: Set<string>, 
-    toggleNode: (id: string) => void,
-    comparingFiles: any[],
-    onValueClick: (fileData: any, val: string, row: any) => void,
-    key?: any
-  }) => {
-    const isExpanded = expandedNodes.has(item.id);
-    const hasChildren = item.children && item.children.length > 0;
-
-    // Check if this node or any descendant has duplicates
-    const hasDuplicates = (node: any): boolean => {
-      if (node.children) {
-        return node.children.some((child: any) => hasDuplicates(child));
-      }
-      if (node.fileData) {
-        const allValues = node.fileData.flatMap((fd: any) => fd.values);
-        return allValues.some((v: string) => allValues.filter(av => av === v).length > 1);
-      }
-      return false;
-    };
-
-    const nodeHasDup = hasDuplicates(item);
-
-    return (
-      <>
-        <tr className={`group transition-colors ${level === 0 ? 'bg-slate-50/80' : 'hover:bg-slate-50'} ${nodeHasDup && !hasChildren ? 'bg-red-50/30' : ''}`}>
-          <td 
-            className={`py-3 px-5 font-medium border-r border-slate-200 bg-white sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] ${level === 0 ? 'text-slate-900' : 'text-slate-700'}`}
-            style={{ paddingLeft: `${level * 24 + 20}px` }}
-          >
-            <div className="flex items-center gap-2">
-              {hasChildren ? (
-                <button 
-                  onClick={() => toggleNode(item.id)}
-                  className={`p-1 rounded transition-colors ${nodeHasDup ? 'text-red-500 hover:bg-red-100' : 'text-slate-400 hover:bg-slate-200 hover:text-slate-600'}`}
-                >
-                  {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                </button>
-              ) : (
-                <div className="w-6 h-6 flex items-center justify-center">
-                  <div className={`w-1.5 h-1.5 rounded-full ${nodeHasDup ? 'bg-red-500' : 'bg-slate-300'}`}></div>
-                </div>
-              )}
-              <span className={`${level === 0 ? 'font-bold' : ''} ${nodeHasDup ? 'text-red-600' : ''}`}>{item.label}</span>
-              {nodeHasDup && hasChildren && !isExpanded && (
-                <span className="flex h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
-              )}
-            </div>
-          </td>
-          {comparingFiles.map((file) => {
-            if (hasChildren) return <td key={file.id} className="border-r border-slate-200 bg-slate-50/30"></td>;
-            
-            const fileData = item.fileData?.find((fd: any) => fd.fileId === file.id);
-            const values = fileData?.values || [];
-
-            return (
-              <td key={file.id} className="py-3 px-5 text-sm border-r border-slate-200 align-top">
-                <div className="flex flex-col gap-2">
-                  {values.map((val: string, valIdx: number) => {
-                    // Simple duplicate detection for mock
-                    const allValuesInRow = item.fileData.flatMap((fd: any) => fd.values);
-                    const isDup = allValuesInRow.filter((v: string) => v === val).length > 1;
-                    const otherFilesWithValue = item.fileData.filter((fd: any) => fd.fileId !== file.id && fd.values.includes(val));
-                    
-                    return (
-                      <div 
-                        key={valIdx}
-                        onClick={() => onValueClick(fileData, val, item)}
-                        className={`p-2 rounded-md border cursor-pointer transition-all relative group/val ${
-                          isDup 
-                            ? 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100 shadow-sm' 
-                            : 'bg-white border-slate-200 text-slate-600 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700'
-                        }`}
-                      >
-                        <div className="flex items-start gap-1.5">
-                          {isDup && <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-red-500" />}
-                          <span className={`break-all leading-relaxed ${isDup ? 'font-semibold' : ''}`}>{val}</span>
-                        </div>
-                        
-                        {isDup && (
-                          <div className="absolute z-50 hidden group-hover/val:block bg-slate-800 text-white text-[10px] rounded p-2 shadow-xl -top-12 left-0 whitespace-nowrap pointer-events-none">
-                            <div className="font-bold mb-0.5">重复预警</div>
-                            <div className="opacity-80">与以下文件内容一致:</div>
-                            <div className="text-blue-300 font-medium">{otherFilesWithValue.map((f: any) => f.fileName).join(', ')}</div>
-                            <div className="absolute -bottom-1 left-4 w-2 h-2 bg-slate-800 transform rotate-45"></div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </td>
-            );
-          })}
-        </tr>
-        {hasChildren && isExpanded && item.children.map((child: any) => (
-          <CreditTreeRow 
-            key={child.id} 
-            item={child} 
-            level={level + 1} 
-            expandedNodes={expandedNodes} 
-            toggleNode={toggleNode}
-            comparingFiles={comparingFiles}
-            onValueClick={onValueClick}
-          />
-        ))}
-      </>
-    );
-  };
-
-  const handleCreditValueClick = (fileData: any, val: string, row: any) => {
-    const otherFilesWithValue = row.fileData.filter((fd: any) => fd.fileId !== fileData.fileId && fd.values.includes(val));
-    const duplicates = otherFilesWithValue.map((fd: any) => ({ fileName: fd.fileName, value: val }));
-    
-    setPdfPreviewState({
-      isOpen: true,
-      fileName: fileData.fileName,
-      value: val,
-      type: row.label,
-      contentType: 'text',
-      duplicates: duplicates.length > 0 ? duplicates : undefined
-    });
-  };
 
   const mockHardwareData = {
     dongles: [
@@ -3371,57 +3017,81 @@ export default function App() {
 
               {/* Credit Tab */}
               {(reportTab === 'credit' || isExporting) && (
-                <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                   {isExporting && <h2 className="text-2xl font-bold text-slate-800 border-b pb-2 m-5 mb-0">资信标比对</h2>}
-                  <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-blue-500 rounded-lg shadow-sm shadow-blue-200">
-                        <Clock className="w-5 h-5 text-white"/>
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-slate-800 text-lg">资信标特征矩阵</h3>
-                        <p className="text-xs text-slate-500 mt-0.5">深度比对投标成员、资质证书、业绩及项目经理等关键信息</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-xs text-slate-500 flex items-center gap-2 bg-white px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
-                        <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>
-                        标红代表存在重复风险 (多份文件信息一致)
-                      </div>
-                      <button 
-                        onClick={() => setExpandedCreditNodes(new Set(expandedCreditNodes.size > 4 ? [] : ['bidding-members', 'certificates', 'performance', 'project-manager']))}
-                        className="text-xs font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                      >
-                        {expandedCreditNodes.size > 4 ? '全部收起' : '全部展开'}
-                      </button>
+                  <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2"><Clock className="w-5 h-5 text-blue-500"/> 资信标特征矩阵</h3>
+                    <div className="text-xs text-slate-500 flex items-center gap-2">
+                      <span className="w-3 h-3 bg-red-100 border border-red-300 rounded-sm inline-block"></span> 标红代表存在重复风险 (多份文件信息一致)
                     </div>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse table-fixed">
+                    <table className="w-full text-left border-collapse">
                       <thead>
-                        <tr className="bg-slate-50/50 border-b border-slate-200 text-xs text-slate-500 uppercase tracking-wider">
-                          <th className="py-4 px-5 font-bold border-r border-slate-200 w-80 bg-white sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">检测点 \ 文件名称</th>
-                          {matrixFiles.map(f => (
-                            <th key={f.id} className="py-4 px-5 font-bold border-r border-slate-200 bg-slate-50/50 min-w-[220px]">
-                              <div className="flex items-center gap-2">
-                                <FileText className="w-4 h-4 text-slate-400" />
-                                <div className="truncate" title={f.name}>{f.name}</div>
-                              </div>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-sm text-slate-600">
+                          <th className="py-4 px-5 font-bold border-r border-slate-200 w-64 bg-white sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">检测点 \ 文件名称</th>
+                          {comparingFiles.map(f => (
+                            <th key={f.id} className="py-4 px-5 font-bold border-r border-slate-200 whitespace-nowrap bg-slate-50">
+                              <div className="truncate w-52" title={f.name}>{f.name}</div>
                             </th>
                           ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200">
-                        {creditTreeData.map((item) => (
-                          <CreditTreeRow 
-                            key={item.id} 
-                            item={item} 
-                            level={0} 
-                            expandedNodes={expandedCreditNodes} 
-                            toggleNode={toggleCreditNode}
-                            comparingFiles={matrixFiles}
-                            onValueClick={handleCreditValueClick}
-                          />
+                        {mockCreditDataByField.map((row, rowIdx) => (
+                          <tr key={row.field} className="hover:bg-slate-50 transition-colors">
+                            <td className="py-4 px-5 font-medium text-slate-800 border-r border-slate-200 bg-white sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                              {row.field}
+                            </td>
+                            {row.files.map((fileData, colIdx) => {
+                              return (
+                                <td key={fileData.fileId} className="py-4 px-5 text-sm border-r border-slate-200 align-top">
+                                  <div className="flex flex-col gap-2">
+                                    {fileData.values.map((val, valIdx) => {
+                                      const otherFilesWithValue = row.files.filter(f => f.fileId !== fileData.fileId && f.values.includes(val));
+                                      const isDup = otherFilesWithValue.length > 0;
+                                      
+                                      return (
+                                        <div 
+                                          key={valIdx}
+                                          onClick={() => {
+                                            const duplicates = otherFilesWithValue.map(f => ({ fileName: f.fileName, value: val }));
+                                            setPdfPreviewState({
+                                              isOpen: true,
+                                              fileName: fileData.fileName,
+                                              value: val,
+                                              type: row.field,
+                                              contentType: 'text',
+                                              duplicates: isDup ? duplicates : undefined
+                                            });
+                                          }}
+                                          className={`p-2 rounded-md border cursor-pointer transition-colors relative group ${
+                                            isDup 
+                                              ? 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100' 
+                                              : 'bg-white border-slate-200 text-slate-700 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700'
+                                          }`}
+                                        >
+                                          <div className="flex items-start gap-1.5">
+                                            {isDup && <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-red-500" />}
+                                            <span className={`break-all ${isDup ? 'font-bold' : ''}`}>{val}</span>
+                                          </div>
+                                          
+                                          {isDup && (
+                                            <div className="absolute z-50 hidden group-hover:block bg-slate-800 text-white text-xs rounded p-2 shadow-lg -top-10 left-0 whitespace-nowrap">
+                                              <div className="font-bold mb-1">重复预警</div>
+                                              <div>与以下文件内容完全一致:</div>
+                                              <div className="text-slate-300 mt-0.5">{otherFilesWithValue.map(f => f.fileName).join(', ')}</div>
+                                              <div className="absolute -bottom-1 left-4 w-2 h-2 bg-slate-800 transform rotate-45"></div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </td>
+                              );
+                            })}
+                          </tr>
                         ))}
                       </tbody>
                     </table>

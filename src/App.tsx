@@ -51,16 +51,16 @@ import {
 
 // Configuration Constants
 const ALL_CHECK_TYPES = ['资信标比对', '技术标比对', '经济标比对', '文件设备特征比对'];
-const ALL_CREDIT_ITEMS = ['法定代表人名称比对', '法定代表人身份证比对', '人员名称比对', '人员身份证比对', '手机号比对', '邮箱比对', '证书编号比对', '业绩名称比对', '地址比对', '统一社会信用代码比对'];
-const ALL_TECH_ITEMS = ['全文语句雷同比对',  'Word属性查重', '图片查重', '图片文字OCR查重', '表格文字查重', '敏感信息查重', '签章查重', '引用内容查重'];
-const ALL_ECONOMIC_ITEMS = ['清单错误一致性比对', '清单内容查重', '项目总价规律性比对', '分部分项报价规律比对', '措施项目规律比对', '其他项目规律比对', '计价锁号比对'];
+const ALL_CREDIT_ITEMS = ['法定代表人名称比对', '法定代表人身份证比对', '人员名称比对', '人员身份证比对', '手机号比对', '邮箱比对', '证书编号比对', '业绩名称比对', '地址比对', '统一社会信用代码比对', '签章查重', '引用内容查重'];
+const ALL_TECH_ITEMS = ['全文语句雷同比对',  'Word属性查重', '图片查重', '图片文字OCR查重', '表格文字查重', '敏感信息查重'];
+const ALL_ECONOMIC_ITEMS = ['项目属性分析（软硬件信息）', '错误一致性分析', '清单报价分析', '定额子目分析', '项目人材机汇总分析'];
 const ALL_DEVICE_ITEMS = ['计算机名比对', '计算机用户名比对', '文件操作来源比对', '文件创建码比对', 'MAC地址比对', 'CPU序列号比对', '文件生成锁号比对', '硬盘序列号比对', '主板序列号比对', '机器特征码比对'];
 
 // Mock Data
 const INSPECTION_POINTS = [
-  { id: 1, title: '资信标比对', desc: '深度比对法定代表人、人员名称、身份证、手机号、邮箱、证书编号、业绩名称、地址及统一社会信用代码等关键资信信息。', icon: <Clock className="w-6 h-6 text-blue-500" /> },
+  { id: 1, title: '资信标比对', desc: '深度比对法定代表人、人员名称、身份证、手机号、邮箱、证书编号、业绩名称、地址、统一社会信用代码、签章及引用内容等关键资信信息。', icon: <Clock className="w-6 h-6 text-blue-500" /> },
   { id: 2, title: '技术标比对', desc: '基于自然语言处理，比对全文语句、表格文字、图片内容及敏感信息，支持过滤招标文件。', icon: <FileSearch className="w-6 h-6 text-emerald-500" /> },
-  { id: 3, title: '经济标比对', desc: '精准提取并比对工程量清单、报价明细等核心经济数据。', icon: <Fingerprint className="w-6 h-6 text-amber-500" /> },
+  { id: 3, title: '经济标比对', desc: '包含项目属性分析（软硬件信息）、错误一致性分析、清单报价分析、定额子目分析、项目人材机汇总分析。', icon: <Fingerprint className="w-6 h-6 text-amber-500" /> },
   { id: 4, title: '文件设备特征比对', desc: '识别生成文档的计算机MAC地址、硬盘序列号及Word属性等底层硬件特征。', icon: <Cpu className="w-6 h-6 text-purple-500" /> },
 ];
 
@@ -559,6 +559,8 @@ export default function App() {
         else if (item === '业绩名称比对') values = i % 2 === 0 ? ['某市第一人民医院门诊楼新建工程', '某市第二人民医院住院楼'] : ['某住宅楼项目'];
         else if (item === '地址比对') values = i % 2 === 0 ? ['北京市海淀区某某路1号'] : ['上海市浦东新区某某路99号'];
         else if (item === '统一社会信用代码比对') values = i % 2 === 0 ? ['91110108MA00123456'] : ['91310115MA00987654'];
+        else if (item === '签章查重') values = i % 2 === 0 ? ['检测到有效电子签章'] : ['未检测到签章'];
+        else if (item === '引用内容查重') values = i % 2 === 0 ? ['引用《建筑设计规范》第3.2条'] : ['无引用内容'];
         else values = [`合规数据 ${i}-${j}-A`, `合规数据 ${i}-${j}-B`];
         
         // Add some cross-file duplicates to test highlighting
@@ -964,7 +966,7 @@ export default function App() {
   const mockEconomicData = [
     { 
       id: 1, 
-      type: '清单错误一致性比对', 
+      type: '错误一致性分析', 
       desc: '发现多处非标准清单特征描述错误完全一致', 
       files: comparingFiles.slice(0, 2).map(f => f.name), 
       riskLevel: '高风险',
@@ -975,7 +977,7 @@ export default function App() {
     },
     { 
       id: 2, 
-      type: '项目总价规律性比对', 
+      type: '清单报价分析', 
       desc: '投标总价呈明显规律性等差递减', 
       files: comparingFiles.slice(0, 3).map(f => f.name), 
       riskLevel: '中风险',
@@ -987,7 +989,7 @@ export default function App() {
     },
     { 
       id: 3, 
-      type: '计价锁号比对', 
+      type: '项目属性分析（软硬件信息）', 
       desc: '提取到完全相同的广联达计价软件加密锁号', 
       files: [comparingFiles[0]?.name, comparingFiles[2]?.name].filter(Boolean), 
       riskLevel: '高风险',
@@ -2531,7 +2533,8 @@ export default function App() {
                       <h3 className="text-sm font-semibold text-slate-800 mb-4 border-l-4 border-emerald-500 pl-2">技术标比对项</h3>
                       <div className="flex flex-wrap gap-x-6 gap-y-4 bg-slate-50 p-4 rounded-lg border border-slate-100">
                         {ALL_TECH_ITEMS.map(item => {
-                          const isDisabled = disabledItems.includes(item);
+                          const isDisabled = disabledItems.includes(item) || item === '图片文字OCR查重';
+                          const isComingSoon = item === '图片文字OCR查重';
                           return (
                           <label key={item} className={`flex items-center gap-2 ${isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer group'}`}>
                             <input 
@@ -2541,7 +2544,10 @@ export default function App() {
                               onChange={() => handleItemToggle(item, selectedTechItems, setSelectedTechItems, '技术标比对')}
                               disabled={isDisabled}
                             />
-                            <span className={`text-sm ${isDisabled ? 'text-slate-500' : 'text-slate-600 group-hover:text-slate-900'}`}>{item}</span>
+                            <span className={`text-sm ${isDisabled ? 'text-slate-500' : 'text-slate-600 group-hover:text-slate-900'}`}>
+                              {item}
+                              {isComingSoon && <span className="ml-1 text-[10px] bg-slate-200 text-slate-500 px-1 rounded">敬请期待</span>}
+                            </span>
                           </label>
                         )})}
                       </div>
@@ -2549,7 +2555,10 @@ export default function App() {
 
                     {/* 经济标比对项 */}
                     <div className={`transition-opacity duration-200 ${selectedCheckTypes.includes('经济标比对') ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
-                      <h3 className="text-sm font-semibold text-slate-800 mb-4 border-l-4 border-amber-500 pl-2">经济标比对项</h3>
+                      <div className="flex items-center gap-3 mb-4">
+                        <h3 className="text-sm font-semibold text-slate-800 border-l-4 border-amber-500 pl-2">经济标比对项</h3>
+                        <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">仅山东、江苏地区清单支持。其余地区逐步完善中，敬请期待～</span>
+                      </div>
                       <div className="flex flex-wrap gap-x-6 gap-y-4 bg-slate-50 p-4 rounded-lg border border-slate-100">
                         {ALL_ECONOMIC_ITEMS.map(item => (
                           <label key={item} className="flex items-center gap-2 cursor-pointer group">
